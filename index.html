@@ -315,8 +315,7 @@ select{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);wi
 .cover th.rowh{text-align:left;padding-right:8px;font-size:11.5px;color:var(--ink2);white-space:nowrap;
   position:sticky;left:0;background:var(--surface)}
 .cover i{display:block;width:24px;height:16px;border-radius:3px;background:var(--nodata)}
-.cover i.on{background:var(--seq);opacity:.85}
-.cover i.csv{background:var(--s3);opacity:.85}
+.cover i.on{background:var(--s3);opacity:.85}   /* есть продажи — зелёный, формат неважен */
 .cover i.fut{background:var(--grid);opacity:.55}
 .cover th.ynew{box-shadow:inset 1px 0 0 var(--axis)}
 .cover th.rowh.grp{padding-right:12px;color:var(--muted);font-size:11px}
@@ -1906,7 +1905,7 @@ function tblReg(){
   };
   const year=+M[S.month].slice(0,4);
   const YRS=[...new Set(M.map(m=>+m.slice(0,4)))].sort();      // годы, что есть в кубе
-  const ysel=S.regYear||String(year);                           // '2025' | '2026' | 'all'
+  const ysel=S.regYear||'all';        // по умолчанию — оба года подряд, помесячно
   const mis=M.map((m,k)=>k).filter(k=>{
     if(k>S.month) return false;
     const y=+M[k].slice(0,4);
@@ -2212,14 +2211,13 @@ function cover(A){
       const mi=idx[m];
       if(mi===undefined||m>lastData) return `<td><i class="fut" title="период ещё не наступил"></i></td>`;
       const k=kind[mi+'|'+oi];
-      return `<td><i class="${k===undefined?'':(k==='csv'?'on csv':'on')}"></i></td>`;}).join('')+'</tr>';
+      return `<td><i class="${k===undefined?'':'on'}" title="${k===undefined?'выгрузки нет':'есть продажи ('+k+')'}"></i></td>`;}).join('')+'</tr>';
   });
   document.getElementById('chCover').innerHTML=h+'</tbody></table>';
   document.getElementById('capCover').innerHTML=
     `<b>Фильтры на этой вкладке не применяются</b> — показаны все ${OFF.length-HIDE_OFF.size} сетей и все месяцы. · `+
     `${grid[0].slice(0,4)}–${grid[grid.length-1].slice(0,4)} · `+
-    `<span style="color:var(--seq)">■</span> есть выгрузка (xlsx) · `+
-    `<span style="color:var(--s3)">■</span> есть выгрузка (csv) · `+
+    `<span style="color:var(--s3)">■</span> продажи предоставлены · `+
     `<span style="color:var(--axis)">■</span> период ещё не наступил · `+
     `<span style="color:#e0958f">■</span> месяц прошёл, выгрузки нет`;
 }
