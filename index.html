@@ -1544,7 +1544,7 @@ function bubbleMap(A){
   }
 
   draw('chMap',  r=>r.ktg, r=>r.cat, 'KT&G Sell Out, MC', 'объём категории', false);
-  draw('chMap3', r=>r.cat, r=>r.ktg, 'Категория, MC',     'продажи KT&G',    true);
+  draw('chMap3', r=>r.ktg, r=>r.cat, 'KT&G Sell Out, MC', 'объём категории', true);
 
   const cm=document.getElementById('mapChips');
   if(cm){
@@ -1562,8 +1562,8 @@ function bubbleMap(A){
   document.getElementById('capMap').textContent =
     `ось X — продажи KT&G в MC, ось Y — Volume Share, размер пузыря — объём категории сети · ${base}`;
   document.getElementById('capMap3').textContent =
-    `та же карта, разрезанная порогами на четыре квадранта БКГ · ось X — объём категории в MC, `+
-    `ось Y — Volume Share, размер пузыря — продажи KT&G · ${base}`;
+    `та же карта, разрезанная порогами на четыре квадранта БКГ · ось X — продажи KT&G в MC, `+
+    `ось Y — Volume Share, размер пузыря — объём категории · ${base}`;
   const shCh=rows.reduce((a,r)=>a+r.ktg,0)/Math.max(1,rows.reduce((a,r)=>a+r.cat,0));
   document.getElementById('mapNote').innerHTML=
     `Каждая точка — сеть канала, цвет — группа. Пунктир делит поле на четыре квадранта БКГ: `+
