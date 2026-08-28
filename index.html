@@ -153,6 +153,10 @@ table.perf tr.key td.num{font-weight:620;color:var(--ink)}
 .pashdr span{font-size:12.5px;font-weight:400;color:var(--muted);margin-left:10px}
 .lagbadge{color:var(--ink);background:var(--wash);border:1px solid var(--border);
   border-radius:6px;padding:1px 7px;font-weight:600}
+.periodbadge{color:var(--page);background:var(--ink);border-radius:6px;padding:2px 9px;
+  font-weight:640;font-size:12.5px}
+#tblNet tr.nettotal td{background:var(--wash);font-weight:660;border-bottom:1px solid var(--axis)}
+#tblNet tr.nettotal td.name{font-size:13.5px}
 .netlist{flex:0 0 178px;max-height:74vh;overflow-y:auto;border:1px solid var(--border);
   border-radius:12px;padding:6px;background:var(--surface)}
 .netlist button{display:block;width:100%;text-align:left;padding:7px 10px;border:0;background:none;
@@ -340,6 +344,12 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
           <div id="chTrend"></div>
           <div class="legend" id="lgTrend"></div>
         </div>
+        <div class="card">
+          <h2>Динамика категории и точек</h2>
+          <div class="cap" id="capCat"></div>
+          <div id="chCat"></div>
+          <div class="legend" id="lgCat"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -431,6 +441,10 @@ const KTG='005 KT&G';
 const KI = MF.indexOf(KTG);
 const CATI = CAT.indexOf('Сигареты');   // витрина считает только сигареты
 const MC = 500;                        // 1 мастер-кейс = 500 пачек
+// Ручная поправка: К&Б приходит одной синтетической точкой (агрегат без разреза по ТТ).
+// Владелец задал фактическое число точек сети — оно используется как ТТ всего.
+const POS_MANUAL={'F_Красное и Белое':21500};
+const posFix=(oi,pc)=>{const m=POS_MANUAL[OFF[oi]]; return (m&&pc<=1)? m : pc;};
 const UI = MF.indexOf('(не распознано)');
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const SER=['--s1','--s2','--s3','--s4','--s5','--s7','--s8','--s6'];
@@ -622,7 +636,7 @@ function kpis(A){
     if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
     const box = m===EM ? agg : (m===EM-1 ? agp : null);
     if(!box) return;
-    box.qc+=a; box.qk+=b2; box.pc+=pc; box.pk+=pk; box.psk+=(psk||0); box.stc+=(stc||0);
+    box.qc+=a; box.qk+=b2; box.pc+=posFix(o,pc); box.pk+=pk; box.psk+=(psk||0); box.stc+=(stc||0);
   });
   const qc=agg.qc, qk=agg.qk, pcAll=agg.pc, pkAll=agg.pk, pskAll=agg.psk, stcAll=agg.stc;
   const prevM = EM>0 ? mlab(M[EM-1]) : '';
@@ -843,7 +857,7 @@ function kooTable(){
     const [m,o,c,qc,qk,pc,pk,cik,spp,sk,psk,stk,stc]=r;
     if(c!==catI || !nets.includes(o)) return;
     const a=P[m]||(P[m]={qc:0,qk:0,pc:0,pk:0,cik:0,spp:0,psk:0,stc:0,sku:new Set()});
-    a.qc+=qc; a.qk+=qk; a.pc+=pc; a.pk+=pk; a.cik+=cik; a.spp+=spp; a.psk+=psk; a.stc+=stc;
+    a.qc+=qc; a.qk+=qk; a.pc+=posFix(o,pc); a.pk+=pk; a.cik+=cik; a.spp+=spp; a.psk+=psk; a.stc+=stc;
     (sk||[]).forEach(x=>a.sku.add(x));
   });
   const sellinM=mi=>{                       // отгрузки по срезу: X5 одной строкой, остальные — по сети
@@ -964,15 +978,12 @@ function tblNet(A){
     let mi=S.month;
     if(!x[mi]){ for(let k=S.month-1;k>=0;k--){ if(x[k]){ mi=k; break; } } }
     const c=x[mi]; if(!c) return;
-    const p=(A.posOffAll[oi]||{})[mi]||{all:0,ktg:0};
-    const prev=mi>0?x[mi-1]:null, yprev=mi>=12?x[mi-12]:null;
+    const praw=(A.posOffAll[oi]||{})[mi]||{all:0,ktg:0};
+    const p={all:posFix(oi,praw.all), ktg:praw.ktg};
     raw.push({oi, name:OFF[oi], bu:BUS[buOfOff[oi]]||'', mi,
       ktg:c.ktg, all:c.all, pos:p.ktg, posAll:p.all,
-      agg:!!(c.all>1e6&&p.all<=1),
-      momA:prev?prev.ktg:null, momB:c.ktg,
-      yoyA:yprev?yprev.ktg:null, yoyB:c.ktg,
-      delta:prev?c.ktg-prev.ktg:0,
-      spark:A.mis.map(k=>x[k]?x[k].ktg:0),
+      agg:!!(POS_MANUAL[OFF[oi]]),
+      days:daysIn(M[mi]),
       lag: mi!==S.month ? mfullname(M[mi])+(M[mi].slice(0,4)!==M[S.month].slice(0,4)?' '+M[mi].slice(2,4):'') : null});
   });
   const groups={};
@@ -980,25 +991,20 @@ function tblNet(A){
   const rows=Object.entries(groups).map(([b,list])=>{
     if(list.length===1) return Object.assign({},list[0],{key:b, kids:null});
     const sum=f=>list.reduce((a,r)=>a+(r[f]||0),0);
-    const momA=list.every(r=>r.momA===null)?null:sum('momA');
-    const yoyA=list.every(r=>r.yoyA===null)?null:sum('yoyA');
     return {key:b, name:b, bu:list[0].bu, kids:list,
       ktg:sum('ktg'), all:sum('all'), pos:sum('pos'), posAll:sum('posAll'),
-      momA, momB:sum('momB'), yoyA, yoyB:sum('yoyB'), delta:sum('delta'),
-      spark:A.mis.map((_,k)=>list.reduce((a,r)=>a+(r.spark[k]||0),0)),
-      lag:list[0].lag, agg:false};
+      days:list[0].days, lag:list[0].lag, agg:false};
   });
   const fin=r=>{
     r.share = r.all? r.ktg/r.all : 0;
     r.numd  = r.posAll? r.pos/r.posAll : null;
-    r.mom   = (r.momA&&r.momA>0)? (r.momB-r.momA)/r.momA : null;
-    r.yoy   = (r.yoyA&&r.yoyA>0)? (r.yoyB-r.yoyA)/r.yoyA : null;
+    r.ppd   = (r.posAll&&r.days)? r.all/r.posAll/r.days : null;   // пачек категории на точку в день
     return r;
   };
   rows.forEach(fin); rows.forEach(r=>(r.kids||[]).forEach(fin));
 
   const KEY={name:r=>r.name, bu:r=>r.bu, all:r=>r.all, ktg:r=>r.ktg, share:r=>r.share,
-    posAll:r=>r.posAll, pos:r=>r.pos, numd:r=>r.numd, mom:r=>r.mom, yoy:r=>r.yoy, delta:r=>r.delta};
+    posAll:r=>r.posAll, pos:r=>r.pos, numd:r=>r.numd, ppd:r=>r.ppd};
   const key=S.netSort in KEY ? S.netSort : 'ktg';
   const dir=S.netDir===undefined?-1:S.netDir;
   const cmp=(a,b)=>{
@@ -1009,29 +1015,28 @@ function tblNet(A){
   };
   rows.sort(cmp);
 
-  const spark=v=>{const w=72,h=20,mx=Math.max(...v,1);
-    const pts=v.map((x,i)=>`${(i/Math.max(1,v.length-1)*w).toFixed(1)},${(h-x/mx*(h-3)-1).toFixed(1)}`);
-    return `<svg viewBox="0 0 ${w} ${h}" style="width:${w}px;height:${h}px">
-      <polyline points="${pts.join(' ')}" fill="none" stroke="${cssv('--ktg')}" stroke-width="1.7"/></svg>`;};
   const T=(l,v,c)=>`<td data-label="${l}"${c?' class="'+c+'"':''}>${v}</td>`;
   const cells=r=>
     T('Категория, MC',fmt(r.all/500))+T('KT&G, MC',fmt(r.ktg/500))+
     T('Volume Share, %',pct(r.share,2))+
     T('ТТ всего, шт',fmt(r.posAll))+T('ТТ с KT&G, шт',fmt(r.pos))+
     T('Num Selling Distr, %',r.numd===null?'—':pct(r.numd,1))+
-    T('KT&G к прошл. мес., %',r.mom===null?'—':`<span class="${cls(r.mom)}">${sgn(r.mom)}</span>`)+
-    T('KT&G год к году, %',r.yoy===null?'—':`<span class="${cls(r.yoy)}">${sgn(r.yoy)}</span>`)+
-    T('Вклад, MC',r.delta?`<span class="${cls(r.delta)}">${fmt(r.delta/500)}</span>`:'—')+
-    T('KT&G, MC — 12 мес.',spark(r.spark),'spark');
+    T('PPD категории',r.ppd===null?'—':r.ppd.toFixed(1).replace('.',','));
 
   const t=document.getElementById('tblNet');
   const th=(k,l,g)=>`<th class="sortable${g?' '+g:''}" data-k="${k}">${l}${S.netSort===k?(dir<0?' ▾':' ▴'):''}</th>`;
   const open=S.netOpen||{};
+  // итоговая строка: реагирует на фильтр групп
+  const tot={name:'Итого'+(gsel!==''?' · '+BUS[gsel]:' по каналу'), bu:'', kids:null, key:'__total__',
+    all:rows.reduce((a,r)=>a+r.all,0), ktg:rows.reduce((a,r)=>a+r.ktg,0),
+    pos:rows.reduce((a,r)=>a+r.pos,0), posAll:rows.reduce((a,r)=>a+r.posAll,0),
+    days:daysIn(M[S.month]), lag:null, agg:false};
+  fin(tot);
   t.innerHTML=`<thead><tr>${th('name','Сеть')}${th('bu','Группа')}
     ${th('all','Категория,<br>MC','g1')}${th('ktg','KT&G,<br>MC','g1')}${th('share','Volume<br>Share, %','g1')}
     ${th('posAll','ТТ всего,<br>шт','g2')}${th('pos','ТТ с KT&G,<br>шт','g2')}${th('numd','Num Selling<br>Distr, %','g2')}
-    ${th('mom','KT&G к прошл.<br>мес., %','g3')}${th('yoy','KT&G год<br>к году, %','g3')}${th('delta','Вклад,<br>MC','g3')}
-    <th>KT&G, MC<br>12 мес.</th></tr></thead><tbody>`+
+    ${th('ppd','PPD<br>категории','g3')}</tr></thead><tbody>`+
+    `<tr class="nettotal"><td class="name"><b>${esc(tot.name)}</b></td><td></td>${cells(tot)}</tr>`+
     rows.map(r=>{
       const op=!!open[r.key];
       let h=`<tr class="netrow${r.kids?' haskids':''}" data-k="${esc(r.key)}" data-oi="${r.oi===undefined?'':r.oi}">
@@ -1063,12 +1068,13 @@ function tblNet(A){
   }
   const sc=document.getElementById('sortChips'); if(sc) sc.innerHTML='';
   document.getElementById('capNet').innerHTML=
-    `${mfull(M[S.month])} · категория «Сигареты» · объёмы в коробках, 1 MC = 500 пачек · `+
+    `<b class="periodbadge">${mfull(M[S.month])}</b> · категория «Сигареты» · объёмы в коробках, 1 MC = 500 пачек · `+
     `клик по заголовку столбца сортирует, повторный клик меняет направление · `+
     `сети с подразделениями (Спар и другие) раскрываются по клику на названии · `+
     `если за месяц выгрузки нет, показан последний месяц с данными — он указан в скобках · `+
-    `<b>KT&G к прошл. мес.</b> и <b>год к году</b> сравнивают объём KT&G в MC за тот же месяц, `+
-    `<b>вклад</b> — разница в MC, <b>12 мес.</b> — спарклайн объёма KT&G в MC за окно.`;
+    `<b>PPD категории</b> — пачек категории на точку в день: категория ÷ ТТ всего ÷ дни месяца. `+
+    `<b>Красное и Белое</b> приходит одной синтетической точкой, поэтому число точек взято ручной поправкой — `+
+    `${fmt(POS_MANUAL['F_Красное и Белое'])} ТТ.`;
 }
 
 /* ---------- конкурентное поле ---------- */
@@ -1239,6 +1245,69 @@ function perfTable(A){
 }
 
 
+/* ---------- динамика категории и точек ---------- */
+function trendCat(A){
+  const box=document.getElementById('chCat'); if(!box) return; box.innerHTML='';
+  const ph=isPhone();
+  const start=Math.max(0, M.indexOf('2025-01'));
+  const mis=[]; for(let k=start;k<=S.month;k++) mis.push(k);
+  const W=ph?620:980, H=ph?250:300, L=ph?12:14, R=ph?42:52, T=26, B=30;
+  const s=svg(W,H);
+  // категория и точки по месяцам в текущем срезе
+  const qc={}, pc={};
+  (D.facts_perf||[]).forEach(r=>{
+    const [m,o,c,a,b2,p]=r;
+    if(c!==CATI || !netOk(o)) return;
+    if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
+    qc[m]=(qc[m]||0)+a; pc[m]=(pc[m]||0)+posFix(o,p);
+  });
+  const vals=mis.map(mi=>(qc[mi]||0)/MC), pts=mis.map(mi=>pc[mi]||0);
+  const max=Math.max(1,...vals), pmax=Math.max(1,...pts)*1.18;
+  const bw=(W-L-R)/mis.length, pad=Math.max(2,bw*0.2);
+  const y=v=>T+(H-T-B)*(1-v/max), yl=v=>T+(H-T-B)*(1-v/pmax);
+  const step=Math.ceil(mis.length/(ph?6:13));
+  mis.forEach((mi,i)=>{
+    const v=vals[i]; if(v>0){
+      const h=(H-T-B)*v/max;
+      const rect=el('rect',{x:L+i*bw+pad,y:y(v),width:Math.max(1,bw-pad*2),height:h,
+        fill:cssv('--s1'),rx:2,opacity:.55});
+      hover(rect,`<b>${mfull(M[mi])}</b><br><span class="r">категория ${fmt(v)} MC<br>точек ${fmt(pts[i])}</span>`);
+      s.appendChild(rect);
+      if(h>=30){
+        const lb=txt(L+i*bw+bw/2, y(v)+h/2+3, fmtShort(v));
+        lb.setAttribute('fill',cssv('--ink')); lb.setAttribute('font-size','9.5');
+        lb.setAttribute('font-weight','600'); lb.setAttribute('pointer-events','none');
+        s.appendChild(lb);
+      }
+    }
+    if(i%step===0||i===mis.length-1) s.appendChild(txt(L+i*bw+bw/2,H-10,mlab(M[mi]),'tick'));
+  });
+  const P=mis.map((mi,i)=>[L+i*bw+bw/2, yl(pts[i])]);
+  s.appendChild(el('path',{d:'M'+P.map(p=>p.join(' ')).join(' L '),fill:'none',
+    stroke:cssv('--s2'),'stroke-width':2.2,'stroke-linejoin':'round'}));
+  P.forEach((p,i)=>{
+    const lb=txt(p[0],p[1]-10,fmtShort(pts[i]));
+    lb.setAttribute('fill',cssv('--s2')); lb.setAttribute('font-size','9.5');
+    lb.setAttribute('font-weight','700'); lb.setAttribute('pointer-events','none');
+    lb.setAttribute('stroke',cssv('--surface')); lb.setAttribute('stroke-width','3');
+    lb.setAttribute('paint-order','stroke fill');
+    s.appendChild(lb);
+    const c=el('circle',{cx:p[0],cy:p[1],r:ph?4.4:3.6,fill:cssv('--page'),
+      stroke:cssv('--s2'),'stroke-width':2});
+    hover(c,`<b>${mfull(M[mis[i]])}</b><br><span class="r">точек с продажами ${fmt(pts[i])}</span>`);
+    s.appendChild(c);
+  });
+  for(let i=0;i<=2;i++){const v=pmax*i/2;
+    s.appendChild(txt(W-R+6,yl(v)+4,fmtShort(v),'tick','start'));}
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y(0),y2:y(0),class:'axisline'}));
+  box.appendChild(s);
+  document.getElementById('lgCat').innerHTML=
+    `<span><i style="background:${cssv('--s1')};opacity:.55"></i>категория, MC</span>`+
+    `<span><i style="background:${cssv('--s2')};border-radius:99px"></i>точек с продажами, правая ось</span>`;
+  document.getElementById('capCat').textContent=
+    `столбцы — объём категории в коробках, линия — число точек с продажами категории`;
+}
+
 /* ---------- Volume Share: доли производителей и изменение к прошлому месяцу ---------- */
 function chManuf(A){
   const box=document.getElementById('chManuf'); box.innerHTML='';
@@ -1323,7 +1392,7 @@ function tblSku(A){
   (D.facts_perf||[]).forEach(r=>{
     const [m,o,c,qc,qk,pc]=r;
     if(c!==CATI || !nets.includes(o)) return;
-    const a=B[m]||(B[m]={qc:0,qk:0,pc:0}); a.qc+=qc; a.qk+=qk; a.pc+=pc;
+    const a=B[m]||(B[m]={qc:0,qk:0,pc:0}); a.qc+=qc; a.qk+=qk; a.pc+=posFix(o,pc);
   });
   // объём и точки по SKU
   const V={};                                  // si -> {m:{q,n}}
@@ -1554,7 +1623,7 @@ function render(){
   syncNetSelect();
   chips(A);
   const tab=S.tab;
-  if(tab==='Паспорт'){ passport(A); kpis(A); trend(A); chManuf(A); }
+  if(tab==='Паспорт'){ passport(A); kpis(A); trend(A); trendCat(A); chManuf(A); }
   else if(tab==='Свод'){ kooTable(); }
   else if(tab==='Сети'){ tblNet(A); }
   else if(tab==='SKU'){ tblSku(A); }
