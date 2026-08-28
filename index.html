@@ -142,12 +142,24 @@ table.perf td.num{text-align:right;font-variant-numeric:tabular-nums}
 table.perf tr.key td.num{font-weight:620;color:var(--ink)}
 .svod{display:flex;gap:14px;align-items:flex-start}
 .pasbody{flex:1 1 auto;min-width:0}
-.tierrow{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;align-items:stretch;margin-bottom:12px}
-.kpis.kpi3{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:0}
+.tierrow{display:grid;grid-template-columns:minmax(0,0.9fr) minmax(0,0.8fr) 360px;gap:12px;
+  align-items:stretch;margin-bottom:12px}
+.kpis.kpi3{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:0;gap:8px}
+.kpis.kpi3 .kpi{padding:9px 10px}
+.kpis.kpi3 .kpi .t{font-size:10.5px;line-height:1.25}
+.kpis.kpi3 .kpi .v{font-size:19px;margin-top:3px}
+.kpis.kpi3 .kpi .d{font-size:10.5px;line-height:1.3;margin-top:2px}
+.cmpblock{margin-bottom:0;display:flex;flex-direction:column}
+table.cmptbl{width:100%;min-width:0;font-size:12.5px}
+table.cmptbl th,table.cmptbl td{padding:7px 8px;white-space:nowrap}
+table.cmptbl thead th{background:var(--wash);font-size:10.5px}
+table.cmptbl td.num,table.cmptbl th.num{text-align:right;font-variant-numeric:tabular-nums}
 .vsblock{margin-bottom:0;display:flex;flex-direction:column}
 .vsblock #chManuf{flex:1 1 auto;display:flex;align-items:stretch}
 .vsblock #chManuf svg{height:100%}
-@media(max-width:1200px){.tierrow{grid-template-columns:1fr}}
+@media(max-width:1500px){.tierrow{grid-template-columns:minmax(0,1fr) 340px}
+  .cmpblock{grid-column:1/-1}}
+@media(max-width:1100px){.tierrow{grid-template-columns:1fr}}
 .pasrow .netlist{max-height:78vh}
 .pashdr{font-size:19px;font-weight:660;letter-spacing:-.01em;margin:2px 0 10px}
 .pashdr span{font-size:12.5px;font-weight:400;color:var(--muted);margin-left:10px}
@@ -329,8 +341,14 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
       <aside class="netlist" id="pasNets"></aside>
       <div class="pasbody">
         <div class="pashdr" id="pasHdr"></div>
+        <div class="chips" id="cmpChips"></div>
         <div class="tierrow">
           <div class="kpis kpi3" id="kpis"></div>
+          <div class="card cmpblock">
+            <h2>Сравнение периодов</h2>
+            <div class="tw"><table class="perf cmptbl" id="tblCmp"></table></div>
+            <div class="note" id="cmpNote"></div>
+          </div>
           <div class="card vsblock">
             <h2>Volume Share, %</h2>
             <div class="cap" id="capManuf"></div>
@@ -469,7 +487,7 @@ const cls=x=>x>=0?'up':'down';
 const TABS=['Сети','Паспорт','Свод','SKU','Регионы','Внимание','Данные'];
 
 const S={month:M.length-1, win:12, bu:'', net:'', cat:'', seg:'', lfl:false,
-         netSort:'ktg', tab:'Канал'};
+         netSort:'ktg', tab:'Сети', cmp:'lm_pm'};
 const X5KEY='x5';                                // «сеть» X5 = Пятёрочка + Перекрёсток + Чижик
 const X5M=new Set(D.x5_members||[]);            // Пятерочка + Перекресток + Чижик
 // выбрана ли сеть oi текущим фильтром: '' — все, 'x5' — вся группа X5, иначе одна сеть
@@ -481,6 +499,26 @@ function netOk(oi){
 const isX5=()=>S.net===X5KEY;
 // последний месяц с данными для текущего среза: если за выбранный выгрузки нет,
 // показываем предыдущий и подписываем это (Атак и Ашан за июль данных не дают)
+const CMP_MODES=[['lm_pm','LM vs PM'],['lm_sply','LM vs SPLY'],['ytd_sply','YTD vs SPLY']];
+// какие месяцы сравниваем: текущий период и база
+function cmpPeriods(){
+  const em=effMonth(), y=+M[em].slice(0,4), mn=+M[em].slice(5);
+  const idx={}; M.forEach((m,i)=>idx[m]=i);
+  const at=(yy,mm)=>{const k=`${yy}-${String(mm).padStart(2,'0')}`; return idx[k]===undefined?null:idx[k];};
+  if(S.cmp==='ytd_sply'){
+    const cur=[], base=[];
+    for(let k=1;k<=mn;k++){ const a=at(y,k), b=at(y-1,k); if(a!==null)cur.push(a); if(b!==null)base.push(b); }
+    return {cur, base, curLab:`${y}, янв–${MON[mn-1]}`, baseLab:`${y-1}, янв–${MON[mn-1]}`, kind:'ytd'};
+  }
+  if(S.cmp==='lm_sply'){
+    const b=at(y-1,mn);
+    return {cur:[em], base:b===null?[]:[b], curLab:mfull(M[em]), baseLab:`${MON[mn-1]} ${y-1}`, kind:'lm'};
+  }
+  const b=em>0?em-1:null;
+  return {cur:[em], base:b===null?[]:[b], curLab:mfull(M[em]),
+          baseLab:b===null?'—':mfull(M[b]), kind:'lm'};
+}
+
 function effMonth(){
   const has=new Set();
   (D.facts_perf||[]).forEach(r=>{
@@ -618,55 +656,83 @@ function pair(A,mi,mj){ // объём KT&G/всего в двух месяцах
 
 /* ---------- KPI ---------- */
 function kpis(A){
-  const cur=A.byMonth[S.month]||{all:0,ktg:0};
-  const share=cur.all?cur.ktg/cur.all:0;
-  const pos=A.posMonth[S.month]||{all:0,ktg:0};
-  const mom=S.month>0?pair(A,S.month-1,S.month):null;
-  const yoyI=S.month-12, yoy=yoyI>=0?pair(A,yoyI,S.month):null;
-  const d=(p,c)=>p>0?(c-p)/p:null;
-  const momK=mom?d(mom.prev.ktg,mom.cur.ktg):null;
-  const yoyK=yoy?d(yoy.prev.ktg,yoy.cur.ktg):null;
-  const momS=mom&&mom.prev.all&&mom.cur.all?(mom.cur.ktg/mom.cur.all)-(mom.prev.ktg/mom.prev.all):null;
-  // срез текущего и предыдущего месяца — из того же куба, что Свод
-  const EM=effMonth();
-  const agg={qc:0,qk:0,pc:0,pk:0,psk:0,stc:0}, agp={qc:0,qk:0,pc:0,pk:0,psk:0,stc:0};
+  const P=cmpPeriods();
+  const zero=()=>({qc:0,qk:0,pc:0,pk:0,psk:0,stc:0,mn:0});
+  const agg=zero(), agp=zero();
+  const seenC=new Set(), seenB=new Set();
   (D.facts_perf||[]).forEach(r=>{
     const [m,o,c,a,b2,pc,pk,cik,spp,sk,psk,stk,stc]=r;
     if(c!==CATI || !netOk(o)) return;
     if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
-    const box = m===EM ? agg : (m===EM-1 ? agp : null);
+    let box=null;
+    if(P.cur.includes(m)){ box=agg; seenC.add(m); }
+    else if(P.base.includes(m)){ box=agp; seenB.add(m); }
     if(!box) return;
     box.qc+=a; box.qk+=b2; box.pc+=posFix(o,pc); box.pk+=pk; box.psk+=(psk||0); box.stc+=(stc||0);
   });
-  const qc=agg.qc, qk=agg.qk, pcAll=agg.pc, pkAll=agg.pk, pskAll=agg.psk, stcAll=agg.stc;
-  const prevM = EM>0 ? mlab(M[EM-1]) : '';
-  // изменение к прошлому месяцу: в процентах для величин, в пунктах для долей
-  const dv=(now,was)=>(was&&was>0)? `<span class="${cls((now-was)/was)}">${sgn((now-was)/was)}</span> к ${prevM}` : '&nbsp;';
-  const dp=(now,was)=>(was!==null&&was!==undefined&&isFinite(was))
-    ? `<span class="${cls(now-was)}">${pp(now-was)}</span> к ${prevM}` : '&nbsp;';
+  agg.mn=seenC.size||1; agp.mn=seenB.size||1;
+  // точки в накоплении — среднее по месяцам, объёмы — сумма
+  const posC=agg.pc/agg.mn, posK=agg.pk/agg.mn, posSt=agg.psk/agg.mn;
+  const posCB=agp.pc/agp.mn, posKB=agp.pk/agp.mn, posStB=agp.psk/agp.mn;
+  const daysOf=list=>list.reduce((a,mi)=>a+daysIn(M[mi]),0);
+  const dC=daysOf(P.cur)||1, dB=daysOf(P.base)||1;
+  const has=agp.qc>0;
+  const dv=(now,was)=>(was&&was>0)? `<span class="${cls((now-was)/was)}">${sgn((now-was)/was)}</span> к ${P.baseLab}` : '&nbsp;';
+  const dn=(now,was)=>(was)? `<span class="${cls(now-was)}">${(now-was>=0?'+':'−')+fmt(Math.abs(Math.round(now-was)))}</span> к ${P.baseLab}` : '&nbsp;';
+  const dp=(now,was)=>(isFinite(was)&&has)? `<span class="${cls(now-was)}">${pp(now-was)}</span> к ${P.baseLab}` : '&nbsp;';
   const rate=(a,b)=>b? a/b : null;
-  // для точек — абсолютное изменение в штуках, а не процент
-  const dn=(now,was)=>(was)? `<span class="${cls(now-was)}">${(now-was>=0?'+':'−')+fmt(Math.abs(now-was))}</span> к ${prevM}` : '&nbsp;';
   const cards=[
-    // ярус 1 — категория
-    ['','Категория, MC', fmt(qc/500), dv(qc, agp.qc)],
-    ['','ТТ всего, шт', fmt(pcAll), dn(pcAll, agp.pc)],
-    ['','Пачек на точку', pcAll?fmt(qc/pcAll):'—', dv(rate(qc,pcAll), rate(agp.qc,agp.pc))],
-    // ярус 2 — KT&G
-    ['hero','KT&G, MC', fmt(qk/500), dv(qk, agp.qk)],
-    ['hero','ТТ с KT&G, шт', fmt(pkAll), dn(pkAll, agp.pk)],
-    ['hero','Пачек на точку KT&G', pkAll?fmt(qk/pkAll):'—', dv(rate(qk,pkAll), rate(agp.qk,agp.pk))],
-    // ярус 3 — доли
-    ['','Volume Share, %', qc?pct(qk/qc,2):'—',
-      agp.qc? dp(qk/qc, agp.qk/agp.qc) : '&nbsp;'],
-    ['','Num Selling Distr, %', pcAll?pct(pkAll/pcAll,1):'—',
-      agp.pc? dp(pkAll/pcAll, agp.pk/agp.pc) : '&nbsp;'],
-    ['','Num Stock Distr, %', (stcAll&&pcAll)?pct(pskAll/pcAll,1):'—',
-      (stcAll&&agp.stc&&agp.pc)? dp(pskAll/pcAll, agp.psk/agp.pc)
-        : (stcAll?'&nbsp;':'сеть не присылает остатки')],
+    ['','Категория, MC', fmt(agg.qc/500), dv(agg.qc, agp.qc)],
+    ['','ТТ всего, шт', fmt(posC), dn(posC, posCB)],
+    ['','Пачек на точку', posC?fmt(agg.qc/posC):'—', dv(rate(agg.qc,posC), rate(agp.qc,posCB))],
+    ['hero','KT&G, MC', fmt(agg.qk/500), dv(agg.qk, agp.qk)],
+    ['hero','ТТ с KT&G, шт', fmt(posK), dn(posK, posKB)],
+    ['hero','Пачек на точку KT&G', posK?fmt(agg.qk/posK):'—', dv(rate(agg.qk,posK), rate(agp.qk,posKB))],
+    ['','Volume Share, %', agg.qc?pct(agg.qk/agg.qc,2):'—',
+      has? dp(agg.qk/agg.qc, agp.qk/agp.qc) : '&nbsp;'],
+    ['','Num Selling Distr, %', posC?pct(posK/posC,1):'—',
+      (has&&posCB)? dp(posK/posC, posKB/posCB) : '&nbsp;'],
+    ['','Num Stock Distr, %', (agg.stc&&posC)?pct(posSt/posC,1):'—',
+      agg.stc? ((agp.stc&&posCB)? dp(posSt/posC, posStB/posCB) : '&nbsp;') : 'сеть не присылает остатки'],
   ];
   document.getElementById('kpis').innerHTML=cards.map(c=>`<div class="kpi ${c[0]}"><div class="t">${c[1]}</div>
     <div class="v">${c[2]}</div><div class="d">${c[3]}</div></div>`).join('');
+
+  // таблица сравнения периодов
+  const rowsT=[
+    ['Категория, MC', agg.qc/500, agp.qc/500, 'num', 'pct'],
+    ['ТТ всего, шт', posC, posCB, 'num', 'abs'],
+    ['PPD категории', posC? agg.qc/posC/dC : null, posCB? agp.qc/posCB/dB : null, 'dec', 'pct'],
+  ];
+  const f1=(v,k)=>v===null||!isFinite(v)?'—':(k==='dec'? v.toFixed(1).replace('.',',') : fmt(v));
+  const tb=document.getElementById('tblCmp');
+  if(tb) tb.innerHTML=`<thead><tr><th>Показатель</th><th class="num">${esc(P.baseLab)}</th>
+      <th class="num">${esc(P.curLab)}</th><th class="num">Diff</th></tr></thead><tbody>`+
+    rowsT.map(([lab,cur,base,k,dk])=>{
+      const ok=base&&isFinite(base)&&isFinite(cur);
+      let dtxt='—';
+      if(ok){
+        if(dk==='abs'){ const a=cur-base;
+          dtxt=`<span class="${cls(a)}">${(a>=0?'+':'−')+fmt(Math.abs(Math.round(a)))}</span>`; }
+        else { const d=(cur-base)/base; dtxt=`<span class="${cls(d)}">${sgn(d)}</span>`; }
+      }
+      return `<tr><td>${esc(lab)}</td><td class="num">${f1(base,k)}</td><td class="num">${f1(cur,k)}</td>`+
+        `<td class="num">${dtxt}</td></tr>`;
+    }).join('')+`</tbody>`;
+
+  const nt=document.getElementById('cmpNote');
+  if(nt) nt.innerHTML = P.kind==='ytd'
+    ? `накопление ${esc(P.curLab)} против ${esc(P.baseLab)}; точки — среднее за месяцы периода, PPD — пачки ÷ средние точки ÷ ${dC} дн.`
+    : `${esc(P.curLab)} против ${esc(P.baseLab)}; PPD — пачки ÷ точки ÷ ${dC} дн.`;
+
+  // чипы режима сравнения
+  const cm=document.getElementById('cmpChips');
+  if(cm){
+    cm.innerHTML=CMP_MODES.map(([k,l])=>
+      `<button class="chip${S.cmp===k?' on':''}" data-c="${k}">${l}</button>`).join('');
+    cm.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{S.cmp=b.dataset.c;render();});
+  }
+  return P;
 }
 
 /* ---------- SVG ---------- */
@@ -1312,12 +1378,12 @@ function trendCat(A){
 function chManuf(A){
   const box=document.getElementById('chManuf'); box.innerHTML='';
   // доли текущего и предыдущего месяца по тем же фильтрам
-  const EM=effMonth();
+  const P=cmpPeriods();
   const cur={}, prv={};
   D.facts_main.forEach(r=>{
     if(!pass(r,A.lfl)) return;
-    if(r[0]===EM) cur[r[3]]=(cur[r[3]]||0)+r[6];
-    else if(r[0]===EM-1) prv[r[3]]=(prv[r[3]]||0)+r[6];
+    if(P.cur.includes(r[0])) cur[r[3]]=(cur[r[3]]||0)+r[6];
+    else if(P.base.includes(r[0])) prv[r[3]]=(prv[r[3]]||0)+r[6];
   });
   const totC=Object.values(cur).reduce((a,b)=>a+b,0)||1;
   const totP=Object.values(prv).reduce((a,b)=>a+b,0);
@@ -1362,7 +1428,7 @@ function chManuf(A){
   [SEP1,SEP2].forEach(x=>s.appendChild(
     el('line',{x1:x,x2:x,y1:8,y2:H-4,stroke:cssv('--grid'),'stroke-width':1})));
   const h1=txt(SHX,8,'доля','tick','end'); h1.setAttribute('font-size','9.5'); s.appendChild(h1);
-  const h2=txt(W-7,8,'к пред. мес.','tick','end'); h2.setAttribute('font-size','9.5'); s.appendChild(h2);
+  const h2=txt(W-7,8,'Diff','tick','end'); h2.setAttribute('font-size','9.5'); s.appendChild(h2);
   box.appendChild(s);
   const cm=document.getElementById('capManuf'); if(cm){ cm.textContent=''; cm.style.display='none'; }
   const lg=document.getElementById('lgManuf'); if(lg) lg.innerHTML='';
