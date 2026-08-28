@@ -102,6 +102,7 @@ tfoot td{font-weight:640;border-top:1px solid var(--axis);border-bottom:none}
 td.name b{font-weight:600}
 .pill{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:99px;border:1px solid var(--border);
   color:var(--muted);margin-left:6px;vertical-align:1px;white-space:nowrap}
+td.name .lag{color:var(--muted);font-weight:400;font-size:12px}
 .bar{height:6px;border-radius:99px;background:var(--wash);overflow:hidden}
 .bar i{display:block;height:100%;background:var(--seq)}
 @media(max-width:760px){
@@ -132,8 +133,10 @@ table.perf td.num{text-align:right;font-variant-numeric:tabular-nums}
 table.perf tr.key td.num{font-weight:620;color:var(--ink)}
 .svod{display:flex;gap:14px;align-items:flex-start}
 .pasbody{flex:1 1 auto;min-width:0}
-.dynrow{display:grid;grid-template-columns:3fr 1fr;gap:12px;align-items:start}
-@media(max-width:1100px){.dynrow{grid-template-columns:1fr}}
+.tierrow{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;align-items:start;margin-bottom:12px}
+.kpis.kpi3{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:0}
+.vsblock{margin-bottom:0}
+@media(max-width:1200px){.tierrow{grid-template-columns:1fr}}
 .pasrow .netlist{max-height:78vh}
 .pashdr{font-size:19px;font-weight:660;letter-spacing:-.01em;margin:2px 0 10px}
 .pashdr span{font-size:12.5px;font-weight:400;color:var(--muted);margin-left:10px}
@@ -188,6 +191,9 @@ table.koo td.dv,table.koo th.dv{box-shadow:inset 1px 0 0 var(--aggline)}
 table.koo tr.grp td{background:var(--wash);font-weight:620;color:var(--ink);
   font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 table.skutbl tr.skurow{cursor:pointer}
+#tblNet tr.netrow td.name{cursor:pointer}
+#tblNet tr.netsub td{background:var(--wash)}
+#tblNet tr.netsub td.name{padding-left:24px;cursor:pointer;font-size:12.5px}
 table.skutbl tr.skurow:hover td{background:var(--wash)}
 table.skutbl tr.sub td{color:var(--ink2);font-size:12px}
 table.skutbl tr.sub td.rowh{padding-left:26px;color:var(--muted);font-size:11.5px}
@@ -302,25 +308,21 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
       <aside class="netlist" id="pasNets"></aside>
       <div class="pasbody">
         <div class="pashdr" id="pasHdr"></div>
-    <div class="kpis" id="kpis"></div>
-    <div class="card">
-      <h2>Динамика KT&amp;G</h2>
-      <div class="cap" id="capTrend"></div>
-      <div id="chTrend"></div>
-      <div class="legend" id="lgTrend"></div>
-    </div>
-    <div class="card">
-      <h2>Группы канала</h2>
-      <div class="cap" id="capBu"></div>
-      <div class="tw"><table class="cards" id="tblBu"></table></div>
-    </div>
-    <div class="card">
-      <h2>Конкурентное поле</h2>
-      <div class="cap" id="capManuf"></div>
-      <div id="chManuf"></div>
-    </div>
-  </section>
-
+        <div class="tierrow">
+          <div class="kpis kpi3" id="kpis"></div>
+          <div class="card vsblock">
+            <h2>Volume Share, %</h2>
+            <div class="cap" id="capManuf"></div>
+            <div id="chManuf"></div>
+            <div class="legend" id="lgManuf"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Динамика KT&amp;G</h2>
+          <div class="cap" id="capTrend"></div>
+          <div id="chTrend"></div>
+          <div class="legend" id="lgTrend"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -411,6 +413,7 @@ const M=D.months, OFF=D.offices, BUS=D.bus, MF=D.manufs, CAT=D.cats, SEG=D.segs,
 const KTG='005 KT&G';
 const KI = MF.indexOf(KTG);
 const CATI = CAT.indexOf('Сигареты');   // витрина считает только сигареты
+const MC = 500;                        // 1 мастер-кейс = 500 пачек
 const UI = MF.indexOf('(не распознано)');
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const SER=['--s1','--s2','--s3','--s4','--s5','--s7','--s8','--s6'];
@@ -426,6 +429,8 @@ const pct=(x,d)=>(x*100).toFixed(d===undefined?1:d).replace('.',',')+'%';
 const pp =x=>(x>=0?'+':'−')+Math.abs(x*100).toFixed(2).replace('.',',')+' п.п.';
 const sgn=x=>(x>=0?'+':'−')+Math.abs(x*100).toFixed(1).replace('.',',')+'%';
 const MON=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+const MONF=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const mfullname=m=>MONF[+m.split('-')[1]-1];
 const mlab=m=>{const [y,n]=m.split('-');return MON[+n-1]+' '+y.slice(2);};
 const mfull=m=>{const [y,n]=m.split('-');return MON[+n-1]+' '+y;};
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -578,27 +583,31 @@ function kpis(A){
   const momK=mom?d(mom.prev.ktg,mom.cur.ktg):null;
   const yoyK=yoy?d(yoy.prev.ktg,yoy.cur.ktg):null;
   const momS=mom&&mom.prev.all&&mom.cur.all?(mom.cur.ktg/mom.cur.all)-(mom.prev.ktg/mom.prev.all):null;
-  // срез категории и точек — из того же куба, что Свод
-  let qc=0,qk=0,pcAll=0,pkAll=0;
+  // срез категории, точек и остатков — из того же куба, что Свод
+  let qc=0,qk=0,pcAll=0,pkAll=0,pskAll=0,stcAll=0;
   (D.facts_perf||[]).forEach(r=>{
-    const [m,o,c,a,b2,pc,pk]=r;
+    const [m,o,c,a,b2,pc,pk,cik,spp,sk,psk,stk,stc]=r;
     if(m!==S.month||c!==CATI) return;
     if(!netOk(o)) return;
     if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
-    qc+=a; qk+=b2; pcAll+=pc; pkAll+=pk;
+    qc+=a; qk+=b2; pcAll+=pc; pkAll+=pk; pskAll+=(psk||0); stcAll+=(stc||0);
   });
   const cards=[
-    ['hero','KT&G, MC', fmt(qk/500),
-      momK===null?'&nbsp;':`<span class="${cls(momK)}">${sgn(momK)}</span> к ${mlab(M[S.month-1])}`],
-    ['hero','Volume Share, %', qc?pct(qk/qc,2):'—',
-      momS===null?'&nbsp;':`<span class="${cls(momS)}">${pp(momS)}</span> к ${mlab(M[S.month-1])}`],
+    // ярус 1 — категория
     ['','Категория, MC', fmt(qc/500), `${fmt(qc)} пачек`],
     ['','ТТ всего, шт', fmt(pcAll), 'точек с продажами категории'],
-    ['','ТТ с KT&G, шт', fmt(pkAll), 'точек, где продавался KT&G'],
+    ['','Пачек на точку', pcAll?fmt(qc/pcAll):'—', 'категория ÷ ТТ всего'],
+    // ярус 2 — KT&G
+    ['hero','KT&G, MC', fmt(qk/500),
+      momK===null?`${fmt(qk)} пачек`:`<span class="${cls(momK)}">${sgn(momK)}</span> к ${mlab(M[S.month-1])}`],
+    ['hero','ТТ с KT&G, шт', fmt(pkAll), 'точек, где продавался KT&G'],
+    ['hero','Пачек на точку KT&G', pkAll?fmt(qk/pkAll):'—', 'KT&G ÷ ТТ с KT&G'],
+    // ярус 3 — доли
+    ['','Volume Share, %', qc?pct(qk/qc,2):'—',
+      momS===null?'KT&G ÷ категория':`<span class="${cls(momS)}">${pp(momS)}</span> к ${mlab(M[S.month-1])}`],
     ['','Num Selling Distr, %', pcAll?pct(pkAll/pcAll,1):'—', 'ТТ с KT&G ÷ ТТ всего'],
-    ['','Год к году, KT&G', yoyK===null?'—':`<span class="${cls(yoyK)}">${sgn(yoyK)}</span>`,
-      yoyK===null?'нет месяца год назад':`${mlab(M[yoyI])} → ${mlab(M[S.month])} · ${yoy.nets} сет.`],
-    ['','На точку, пачек', pkAll?fmt(qk/pkAll):'—','средняя продажа KT&G на активную точку'],
+    ['','Num Stock Distr, %', (stcAll&&pcAll)?pct(pskAll/pcAll,1):'—',
+      stcAll?'ТТ с остатком KT&G ÷ ТТ всего':'сеть не присылает остатки'],
   ];
   document.getElementById('kpis').innerHTML=cards.map(c=>`<div class="kpi ${c[0]}"><div class="t">${c[1]}</div>
     <div class="v">${c[2]}</div><div class="d">${c[3]}</div></div>`).join('');
@@ -627,23 +636,26 @@ function hover(node,html){
 function trend(A){
   const box=document.getElementById('chTrend'); box.innerHTML='';
   const ph=isPhone();
-  const mis=A.mis, W=ph?620:900, H=ph?250:310, L=ph?44:52, R=ph?38:46, T=26, B=30;
+  // паспорт показывает весь период: январь 2025 → выбранный месяц
+  const start=Math.max(0, M.indexOf('2025-01'));
+  const misAll=[]; for(let k=start;k<=S.month;k++) misAll.push(k);
+  const mis=misAll, W=ph?620:980, H=ph?250:300, L=ph?12:14, R=ph?38:46, T=26, B=30;
   const s=svg(W,H);
   const bus=BUS.map((b,i)=>i).filter(bi=>S.bu===''||bi==+S.bu);
-  const cube={}, lfl=A.lfl;
+  const cube={}, lfl=A.lfl, allq={};
   D.facts_main.forEach(r=>{
-    if(!mis.includes(r[0])||!pass(r,lfl)||r[3]!==KI) return;
+    if(!mis.includes(r[0])||!pass(r,lfl)) return;
+    allq[r[0]]=(allq[r[0]]||0)+r[6];                       // категория целиком — для доли
+    if(r[3]!==KI) return;
     (cube[r[0]]=cube[r[0]]||{}); cube[r[0]][r[2]]=(cube[r[0]][r[2]]||0)+r[6];
   });
   const tot=mis.map(mi=>bus.reduce((a,b)=>a+((cube[mi]&&cube[mi][b])||0),0));
   const max=Math.max(1,...tot);
-  const sh=mis.map(mi=>{const x=A.byMonth[mi];return x&&x.all?x.ktg/x.all:0;});
+  const sh=mis.map((mi,i)=>allq[mi]?tot[i]/allq[mi]:0);    // доля за весь период, не только окно
   const shMax=Math.max(0.001,...sh)*1.25;
   const bw=(W-L-R)/mis.length, pad=Math.max(2,bw*0.2);
   const y=v=>T+(H-T-B)*(1-v/max);
-  for(let i=0;i<=(ph?3:4);i++){const v=max*i/(ph?3:4);
-    s.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),class:'gridline'}));
-    s.appendChild(txt(L-6,y(v)+4,nf.format(Math.round(v/MC)),'tick','end'));}   // ось в коробках
+  // без линий сетки и без левой оси: значение подписано на каждом столбце
   const step=Math.ceil(mis.length/(ph?6:13));
   mis.forEach((mi,i)=>{
     let acc=0;
@@ -679,7 +691,7 @@ function trend(A){
     s.appendChild(lb);
     const c=el('circle',{cx:p[0],cy:p[1],r:ph?4.4:3.6,fill:cssv('--page'),
     stroke:cssv('--ktg'),'stroke-width':2});
-    hover(c,`<b>${mfull(M[mis[i]])}</b><br><span class="r">доля KT&G ${pct(sh[i],2)}<br>KT&G ${fmt(tot[i]/MC)} MC из ${fmt((A.byMonth[mis[i]]||{all:0}).all/MC)} MC</span>`);
+    hover(c,`<b>${mfull(M[mis[i]])}</b><br><span class="r">Volume Share ${pct(sh[i],2)}<br>KT&G ${fmt(tot[i]/MC)} MC из ${fmt((allq[mis[i]]||0)/MC)} MC</span>`);
     s.appendChild(c);});
   for(let i=0;i<=2;i++){const v=shMax*i/2;
     s.appendChild(txt(W-R+6,yl(v)+4,pct(v,1),'tick','start'));}
@@ -692,194 +704,7 @@ function trend(A){
     `столбцы — KT&G в коробках (1 MC = 500 пачек) по группам канала, линия — Volume Share`;
 }
 
-/* ---------- конкурентное поле ---------- */
-function chManuf(A){
-  const box=document.getElementById('chManuf'); box.innerHTML='';
-  const rows=Object.entries(A.byMf).map(([mi,q])=>({n:MF[mi],q:+q})).sort((a,b)=>b.q-a.q);
-  const tot=rows.reduce((a,r)=>a+r.q,0)||1;
-  const ph=isPhone(), W=ph?560:420, rh=ph?30:26, H=rows.length*rh+6, L=ph?116:104;
-  const s=svg(W,H); const max=Math.max(...rows.map(r=>r.q),1);
-  rows.forEach((r,i)=>{
-    const y=i*rh+5, w=(W-L-56)*r.q/max, isK=r.n===KTG;
-    const rect=el('rect',{x:L,y,width:Math.max(2,w),height:ph?17:15,rx:2,
-      fill:isK?cssv('--ktg'):cssv('--s1'),opacity:isK?.95:.5});
-    hover(rect,`<b>${esc(r.n)}</b><br><span class="r">${fmt(r.q)} пачек · ${pct(r.q/tot,2)}</span>`);
-    s.appendChild(rect);
-    s.appendChild(txt(L-8,y+13,r.n.replace(/^\d+\s/,''),isK?'val':'tick','end'));
-    s.appendChild(txt(L+Math.max(2,w)+7,y+13,pct(r.q/tot,1),'val','start'));
-  });
-  box.appendChild(s);
-  document.getElementById('capManuf').textContent=`${mfull(M[S.month])} · доля производителей в объёме категории`;
-}
-
-/* ---------- группы ---------- */
-function tblBu(A){
-  const rows=[];
-  const bus=BUS.map((b,i)=>i).filter(bi=>S.bu===''||bi==+S.bu);
-  const totK=bus.reduce((a,b)=>a+((A.byBu[b]||{}).ktg||0),0);
-  bus.forEach(bi=>{
-    const c=A.byBu[bi]||{all:0,ktg:0,unk:0}, p=A.posBu[bi]||{all:0,ktg:0};
-    const gm=(mi,mj)=>{let a=0,b=0,n=0;
-      OFF.forEach((o,oi)=>{ if(buOfOff[oi]!==bi) return;
-        if(!has.has(mi+'|'+oi)||!has.has(mj+'|'+oi)) return;
-        if(A.lfl&&!A.lfl.has(oi)) return;
-        const x=A.byOff[oi]; if(!x) return; n++;
-        if(x[mi])a+=x[mi].ktg; if(x[mj])b+=x[mj].ktg;});
-      return {a,b,n,d:a>0?(b-a)/a:null};};
-    const mom=S.month>0?gm(S.month-1,S.month):{d:null,b:0,a:0};
-    const yoy=S.month>=12?gm(S.month-12,S.month):{d:null};
-    rows.push({name:BUS[bi], ktg:c.ktg, all:c.all, share:c.all?c.ktg/c.all:0,
-      pos:p.ktg, posAll:p.all, mom:mom.d, yoy:yoy.d,
-      delta:mom.d===null?0:mom.b-mom.a, part:totK?c.ktg/totK:0});
-  });
-  rows.sort((x,y)=>y.ktg-x.ktg);
-  const T=(l,v,c)=>`<td data-label="${l}"${c?' class="'+c+'"':''}>${v}</td>`;
-  document.getElementById('tblBu').innerHTML=
-    `<thead><tr><th>Группа</th><th>KT&G, пачек</th><th>Вес, %</th><th>Объём канала, пачек</th>
-      <th>Доля KT&G, %</th><th>Точек с KT&G, шт</th><th>К прошл. мес., %</th><th>Год к году, %</th>
-      <th>Вклад, пачек</th></tr></thead><tbody>`+
-    rows.map(r=>`<tr><td class="name"><b>${esc(r.name)}</b></td>`+
-      T('KT&G, пачек',fmt(r.ktg))+T('Вес, %',pct(r.part))+
-      T('Объём канала, пачек',fmtShort(r.all))+T('Доля KT&G, %',pct(r.share,2))+
-      T('Точек с KT&G, шт',fmt(r.pos))+
-      T('К прошл. мес.',r.mom===null?'—':`<span class="${cls(r.mom)}">${sgn(r.mom)}</span>`)+
-      T('Год к году',r.yoy===null?'—':`<span class="${cls(r.yoy)}">${sgn(r.yoy)}</span>`,'hide-m')+
-      T('Вклад',r.delta?`<span class="${cls(r.delta)}">${fmtShort(r.delta)}</span>`:'—','hide-m')+
-      `</tr>`).join('')+
-    `</tbody><tfoot><tr><td class="name"><b>Итого</b></td>`+
-      T('KT&G, пачек',fmt(rows.reduce((a,r)=>a+r.ktg,0)))+T('Вес, %','100%')+
-      T('Объём канала, пачек',fmtShort(rows.reduce((a,r)=>a+r.all,0)))+
-      T('Доля KT&G',pct(rows.reduce((a,r)=>a+r.ktg,0)/Math.max(1,rows.reduce((a,r)=>a+r.all,0)),2))+
-      T('Точек с KT&G, шт',fmt(rows.reduce((a,r)=>a+r.pos,0)))+T('К прошл. мес., %','')+
-      T('Год к году','','hide-m')+
-      T('Вклад',`<span class="${cls(rows.reduce((a,r)=>a+r.delta,0))}">${fmtShort(rows.reduce((a,r)=>a+r.delta,0))}</span>`,'hide-m')+
-    `</tr></tfoot>`;
-  document.getElementById('capBu').textContent=`${mfull(M[S.month])} · «вклад» — пачки KT&G, добавленные или потерянные к прошлому месяцу`;
-}
-
-
-/* ---------- Performance: таблица мер по эталону куба Iceberg ---------- */
-const MC = 500;                      // 1 мастер-кейс = 500 пачек
-function daysIn(m){const [y,n]=m.split('-').map(Number);return new Date(y,n,0).getDate();}
-function perfTable(A){
-  const mis=A.mis;
-  const catI = CATI;
-  const catName = CAT[catI]||'(все категории)';
-  // свод по месяцам с учётом фильтров «сеть» и «группа»
-  const agg={};                       // month -> меры
-  let nets=new Set();
-  (D.facts_perf||[]).forEach(r=>{
-    const [m,o,c,qc,qk,pc,pk,cik,spp,nsku]=r;   // r[10..12] — остатки, см. ниже
-    if(c!==catI) return;
-    if(!mis.includes(m)) return;
-    if(!netOk(o)) return;
-    if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
-    if(A.lfl && !A.lfl.has(o)) return;
-    nets.add(o);
-    const a=agg[m]=agg[m]||{qc:0,qk:0,pc:0,pk:0,cik:0,spp:0,sku:new Set(),psk:0,stk:0,stc:0};
-    a.qc+=qc; a.qk+=qk; a.pc+=pc; a.pk+=pk; a.cik+=cik; a.spp+=spp;
-    a.psk+=(r[10]||0); a.stk+=(r[11]||0); a.stc+=(r[12]||0);
-    (nsku||[]).forEach(x=>a.sku.add(x));   // уникальные SKU — объединение, не сумма
-  });
-  const one = nets.size===1;
-  // Sell Out для сравнения с отгрузками — по ВСЕМ категориям: Sell In по категориям не делится
-  const soAll={};
-  D.facts_main.forEach(r=>{
-    if(!mis.includes(r[0])||r[3]!==KI) return;
-    if(!netOk(r[1])) return;
-    if(S.bu!=='' && r[2]!=+S.bu) return;
-    if(A.lfl && !A.lfl.has(r[1])) return;
-    soAll[r[0]]=(soAll[r[0]]||0)+r[6];
-  });
-  // Sell In берём только по сетям, у которых в этом месяце есть скан-данные, — иначе сравнение врёт
-  const siM={};
-  mis.forEach(m=>{
-    let v=0, ok=false;
-    if(isX5()){ v=SIX5[m]||0; ok=true; }
-    else if(S.net!==''){
-      if(X5M.has(+S.net)) { ok=false; }                   // отдельная сеть X5 — отгрузки не делятся
-      else { v=SI[m+'|'+S.net]||0; ok=true; }
-    } else {
-      OFF.forEach((o,oi)=>{
-        if(S.bu!=='' && buOfOff[oi]!=+S.bu) return;
-        if(A.lfl && !A.lfl.has(oi)) return;
-        if(X5M.has(oi)) return;                            // X5 добавим одной строкой ниже
-        v+=SI[m+'|'+oi]||0; ok=true;
-      });
-      if(S.bu===''){ v+=SIX5[m]||0; ok=true; }
-    }
-    siM[m]= ok ? v : undefined;                            // отгрузки идут за все месяцы, где они есть
-  });
-  const x5only = S.net!=='' && S.net!==X5KEY && X5M.has(+S.net);
-  const num=(v,d)=>v===null||v===undefined||!isFinite(v)?'—':
-    (d===0?fmt(v):v.toLocaleString('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d}));
-  const ROWS=[
-    ['grp','Объём'],
-    ['Продажи Категория, MC', m=>agg[m]?num(agg[m].qc/MC,0):'—', 0],
-    ['Продажи KT&G, MC',      m=>agg[m]?num(agg[m].qk/MC,0):'—', 1],
-    ['Volume Share, %',       m=>agg[m]&&agg[m].qc?num(agg[m].qk/agg[m].qc*100,2):'—', 1],
-    ['SiSS, %',               m=>agg[m]&&agg[m].cik?num(agg[m].qk/agg[m].cik*100,2):'—', 1],
-    ['grp','Дистрибуция'],
-    ['К-во ТТ с продажами, Total', m=>agg[m]?num(agg[m].pc,0):'—', 0],
-    ['К-во ТТ с продажами KT&G',   m=>agg[m]?num(agg[m].pk,0):'—', 0],
-    ['Num Selling Distr, %',  m=>agg[m]&&agg[m].pc?num(agg[m].pk/agg[m].pc*100,1):'—', 1],
-    ['VW Selling Distr, %',   m=>agg[m]&&agg[m].qc?num(agg[m].cik/agg[m].qc*100,1):'—', 1],
-    ['К-во ТТ со стоками KT&G', m=>agg[m]&&agg[m].stc?num(agg[m].psk,0):'—', 0],
-    ['Num Stock Distr, %',     m=>agg[m]&&agg[m].stc&&agg[m].pc?num(agg[m].psk/agg[m].pc*100,1):'—', 1],
-    ['grp','Ассортимент и интенсивность'],
-    ['Кол-во уникальных SKU', m=>agg[m]&&agg[m].sku.size?num(agg[m].sku.size,0):'—', 0],
-    ['Среднее кол-во SKU на ТТ', m=>agg[m]&&agg[m].pk?num(agg[m].spp/agg[m].pk,1):'—', 0],
-    ['PPD (by KT&G)',         m=>agg[m]&&agg[m].pk?num(agg[m].qk/agg[m].pk/daysIn(M[m]),1):'—', 1],
-    ['grp','Отгрузки (Sell In)'],
-    ['Sell In, MC', m=>siM[m]===undefined?'—':num(siM[m]/MC,0), 0],
-    ['Sell Out всего, MC', m=>soAll[m]?num(soAll[m]/MC,0):'—', 0],
-    ['Sell Out − Sell In, MC', m=>(siM[m]&&soAll[m])?num((soAll[m]-siM[m])/MC,0):'—', 0],
-    ['Sell Out / Sell In, %', m=>(siM[m]&&soAll[m])?num(soAll[m]/siM[m]*100,0):'—', 1],
-  ];
-  let h='<thead><tr><th class="rowh">Мера</th>'+
-    mis.map(m=>`<th class="num" style="text-align:right">${mlab(M[m])}</th>`).join('')+'</tr></thead><tbody>';
-  ROWS.forEach(r=>{
-    if(r[0]==='grp'){
-      h+=`<tr class="grp"><td class="rowh">${esc(r[1])}</td>`+
-         mis.map(()=>'<td></td>').join('')+'</tr>';
-      return;
-    }
-    const [label,fn,key]=r;
-    h+=`<tr class="${key?'key':''}"><td class="rowh">${esc(label)}</td>`+
-       mis.map(m=>`<td class="num">${fn(m)}</td>`).join('')+'</tr>';
-  });
-  document.getElementById('tblPerf').innerHTML=h+'</tbody>';
-
-  const who = S.net!=='' ? netLabel() : (S.bu!=='' ? BUS[S.bu] : 'канал целиком');
-  document.getElementById('capPerf').textContent =
-    `${who} · категория «${catName}» · ${mis.length} мес. по ${mfull(M[S.month])}`;
-  document.getElementById('perfNote').innerHTML =
-    `1 MC = 500 пачек. <b>SiSS</b> (Share in Shops with Sales) — продажи KT&G ÷ продажи категории `+
-    `в тех точках, где KT&G продавался в этом периоде. Тождество: <b>SiSS = Volume Share ÷ VW Selling Distr</b>. `+
-    `<b>Num Selling Distr</b> считает точки поштучно, <b>VW</b> взвешивает их оборотом категории — `+
-    `разрыв между ними показывает, в тех ли магазинах мы стоим. <b>PPD</b> — пачек KT&G на активную точку в день. `+
-    `<b>Num Stock Distr</b> — точки с остатком KT&G ÷ точки с продажами категории. Прочерк в строках остатков `+
-    `означает, что сеть остатки не присылает, а не что остатков нет.<br>`+
-    `<b>Sell In</b> — наши отгрузки в сеть, пачки, из файла «${esc(D.sellin_path||'Sell In')}». Сравнивается с `+
-    `<b>Sell Out всего</b> — продажами KT&G по всем категориям, потому что отгрузки по категориям не делятся. `+
-    `Отгрузки показываются за все месяцы, где они есть; разница и отношение считаются только там, `+
-    `где есть обе части. `+
-    `<b>Sell Out / Sell In</b> ниже 100 % — товар осел в запасах сети, выше 100 % — сеть продаёт больше, чем мы `+
-    `отгрузили напрямую (распродажа запаса или поставка через дистрибьютора).`+
-    (x5only?` <b>Отгрузки по этой сети пустые:</b> в источнике они приходят одной строкой на всю группу — выбери в фильтре сеть «X5», чтобы увидеть Sell In.`:'');
-
-  // быстрый выбор сети чипами, не открывая фильтры
-  const top=[...new Set((D.facts_perf||[]).filter(r=>r[2]===catI&&r[0]===S.month)
-      .sort((a,b)=>b[4]-a[4]).map(r=>r[1]))].slice(0,12);
-  const box=document.getElementById('perfChips');
-  box.innerHTML=`<button class="chip${S.net===''?' on':''}" data-n="">весь канал</button>`+
-    (X5M.size?`<button class="chip${isX5()?' on':''}" data-n="${X5KEY}">X5 (группа)</button>`:'')+
-    top.map(o=>`<button class="chip${S.net==o?' on':''}" data-n="${o}">${esc(OFF[o])}</button>`).join('');
-  box.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>{
-    S.net=b.dataset.n; document.getElementById('fNet').value=S.net; render();});
-}
-
-
+/* ---------- список сетей, паспорт, свод, сети ---------- */
 /* ---------- список сетей (общий для вкладок) ---------- */
 function netListInto(elId){
   const box=document.getElementById(elId); if(!box) return;
@@ -1079,74 +904,340 @@ function kooTable(){
 
 /* ---------- сети ---------- */
 function tblNet(A){
-  const rows=[];
   const gsel=S.netBu===undefined?'':S.netBu;
+  const base=n=>n.replace(/\s*\([^)]*\)\s*$/,'').trim();     // «F_Спар (МВ)» → «F_Спар»
+  // собираем строки по сетям, затем группируем одноимённые подразделения
+  const raw=[];
   OFF.forEach((o,oi)=>{
-    // вкладка «Сети» показывает канал целиком; свой фильтр — только по группе
     if(gsel!=='' && buOfOff[oi]!=+gsel) return;
     const x=A.byOffAll[oi]; if(!x) return;
-    const c=x[S.month], p=(A.posOffAll[oi]||{})[S.month]||{all:0,ktg:0};
-    const prev=S.month>0?x[S.month-1]:null, yprev=S.month>=12?x[S.month-12]:null;
-    rows.push({oi,name:o,bu:BUS[buOfOff[oi]]||'',
-      ktg:c?c.ktg:0, all:c?c.all:0, share:c&&c.all?c.ktg/c.all:0,
-      unk:c&&c.all?c.unk/c.all:0, agg:!!(c&&c.all>1e6&&p.all<=1),
-      pos:p.ktg, posAll:p.all,
-      mom:(prev&&prev.ktg>0&&c)?(c.ktg-prev.ktg)/prev.ktg:null,
-      yoy:(yprev&&yprev.ktg>0&&c)?(c.ktg-yprev.ktg)/yprev.ktg:null,
-      delta:(prev&&c)?c.ktg-prev.ktg:0,
-      spark:A.mis.map(mi=>x[mi]?x[mi].ktg:0), gap:!c});
+    let mi=S.month;
+    if(!x[mi]){ for(let k=S.month-1;k>=0;k--){ if(x[k]){ mi=k; break; } } }
+    const c=x[mi]; if(!c) return;
+    const p=(A.posOffAll[oi]||{})[mi]||{all:0,ktg:0};
+    const prev=mi>0?x[mi-1]:null, yprev=mi>=12?x[mi-12]:null;
+    raw.push({oi, name:OFF[oi], bu:BUS[buOfOff[oi]]||'', mi,
+      ktg:c.ktg, all:c.all, pos:p.ktg, posAll:p.all,
+      agg:!!(c.all>1e6&&p.all<=1),
+      momA:prev?prev.ktg:null, momB:c.ktg,
+      yoyA:yprev?yprev.ktg:null, yoyB:c.ktg,
+      delta:prev?c.ktg-prev.ktg:0,
+      spark:A.mis.map(k=>x[k]?x[k].ktg:0),
+      lag: mi!==S.month ? mfullname(M[mi])+(M[mi].slice(0,4)!==M[S.month].slice(0,4)?' '+M[mi].slice(2,4):'') : null});
   });
-  const key=S.netSort;
-  rows.sort((a,b)=>{
-    if(key==='name') return a.name.localeCompare(b.name,'ru');
-    if(key==='delta') return (b.delta||0)-(a.delta||0);
-    if(key==='share') return b.share-a.share;
-    if(key==='mom') return (b.mom===null?-9:b.mom)-(a.mom===null?-9:a.mom);
-    return b.ktg-a.ktg;});
-  const maxK=Math.max(1,...rows.map(r=>r.ktg));
+  const groups={};
+  raw.forEach(r=>{const b=base(r.name); (groups[b]=groups[b]||[]).push(r);});
+  const rows=Object.entries(groups).map(([b,list])=>{
+    if(list.length===1) return Object.assign({},list[0],{key:b, kids:null});
+    const sum=f=>list.reduce((a,r)=>a+(r[f]||0),0);
+    const momA=list.every(r=>r.momA===null)?null:sum('momA');
+    const yoyA=list.every(r=>r.yoyA===null)?null:sum('yoyA');
+    return {key:b, name:b, bu:list[0].bu, kids:list,
+      ktg:sum('ktg'), all:sum('all'), pos:sum('pos'), posAll:sum('posAll'),
+      momA, momB:sum('momB'), yoyA, yoyB:sum('yoyB'), delta:sum('delta'),
+      spark:A.mis.map((_,k)=>list.reduce((a,r)=>a+(r.spark[k]||0),0)),
+      lag:list[0].lag, agg:false};
+  });
+  const fin=r=>{
+    r.share = r.all? r.ktg/r.all : 0;
+    r.numd  = r.posAll? r.pos/r.posAll : null;
+    r.mom   = (r.momA&&r.momA>0)? (r.momB-r.momA)/r.momA : null;
+    r.yoy   = (r.yoyA&&r.yoyA>0)? (r.yoyB-r.yoyA)/r.yoyA : null;
+    return r;
+  };
+  rows.forEach(fin); rows.forEach(r=>(r.kids||[]).forEach(fin));
+
+  const KEY={name:r=>r.name, bu:r=>r.bu, all:r=>r.all, ktg:r=>r.ktg, share:r=>r.share,
+    posAll:r=>r.posAll, pos:r=>r.pos, numd:r=>r.numd, mom:r=>r.mom, yoy:r=>r.yoy, delta:r=>r.delta};
+  const key=S.netSort in KEY ? S.netSort : 'ktg';
+  const dir=S.netDir===undefined?-1:S.netDir;
+  const cmp=(a,b)=>{
+    const va=KEY[key](a), vb=KEY[key](b);
+    if(key==='name'||key==='bu') return String(va).localeCompare(String(vb),'ru')*(dir<0?1:-1);
+    const na=(va===null||va===undefined)?-Infinity:va, nb=(vb===null||vb===undefined)?-Infinity:vb;
+    return (nb-na)*(dir<0?1:-1);
+  };
+  rows.sort(cmp);
+
   const spark=v=>{const w=72,h=20,mx=Math.max(...v,1);
     const pts=v.map((x,i)=>`${(i/Math.max(1,v.length-1)*w).toFixed(1)},${(h-x/mx*(h-3)-1).toFixed(1)}`);
     return `<svg viewBox="0 0 ${w} ${h}" style="width:${w}px;height:${h}px">
       <polyline points="${pts.join(' ')}" fill="none" stroke="${cssv('--ktg')}" stroke-width="1.7"/></svg>`;};
   const T=(l,v,c)=>`<td data-label="${l}"${c?' class="'+c+'"':''}>${v}</td>`;
+  const cells=r=>
+    T('Категория, MC',fmt(r.all/500))+T('KT&G, MC',fmt(r.ktg/500))+
+    T('Volume Share, %',pct(r.share,2))+
+    T('ТТ всего, шт',fmt(r.posAll))+T('ТТ с KT&G, шт',fmt(r.pos))+
+    T('Num Selling Distr, %',r.numd===null?'—':pct(r.numd,1))+
+    T('KT&G к прошл. мес., %',r.mom===null?'—':`<span class="${cls(r.mom)}">${sgn(r.mom)}</span>`)+
+    T('KT&G год к году, %',r.yoy===null?'—':`<span class="${cls(r.yoy)}">${sgn(r.yoy)}</span>`)+
+    T('Вклад, MC',r.delta?`<span class="${cls(r.delta)}">${fmt(r.delta/500)}</span>`:'—')+
+    T('KT&G, MC — 12 мес.',spark(r.spark),'spark');
+
   const t=document.getElementById('tblNet');
-  const th=(k,l)=>`<th class="sortable" data-k="${k}">${l}${S.netSort===k?' ▾':''}</th>`;
-  t.innerHTML=`<thead><tr>${th('name','Сеть')}<th>Группа</th>
-    <th>Категория,<br>MC</th>${th('ktg','KT&G,<br>MC')}
-    ${th('share','Volume<br>Share, %')}
-    <th>ТТ всего,<br>шт</th><th>ТТ с KT&G,<br>шт</th><th>Num Selling<br>Distr, %</th>
-    ${th('mom','К прошл.<br>мес., %')}<th>Год к году,<br>%</th>${th('delta','Вклад,<br>MC')}
-    <th>KT&G,<br>12 мес.</th></tr></thead><tbody>`+
-    rows.map(r=>`<tr data-oi="${r.oi}"><td class="name"><b>${esc(r.name)}</b>
-      <span class="pill bu">${esc(r.bu)}</span>${r.gap?'<span class="pill">нет месяца</span>':''}${r.agg?'<span class="pill">агрегат</span>':''}</td>`+
-      `<td class="hide-m" style="text-align:left">${esc(r.bu)}</td>`+
-      T('Категория, MC',fmt(r.all/500))+T('KT&G, MC',fmt(r.ktg/500))+
-      T('Volume Share, %',pct(r.share,2))+
-      T('ТТ всего, шт',fmt(r.posAll))+T('ТТ с KT&G, шт',fmt(r.pos))+
-      T('Num Selling Distr, %',r.posAll?pct(r.pos/r.posAll,1):'—')+
-      T('К прошл. мес., %',r.mom===null?'—':`<span class="${cls(r.mom)}">${sgn(r.mom)}</span>`)+
-      T('Год к году, %',r.yoy===null?'—':`<span class="${cls(r.yoy)}">${sgn(r.yoy)}</span>`)+
-      T('Вклад, MC',r.delta?`<span class="${cls(r.delta)}">${fmt(r.delta/500)}</span>`:'—','hide-m')+
-      T('KT&G, 12 мес.',spark(r.spark),'spark')+
-      `</tr>`).join('')+`</tbody>`;
-  t.querySelectorAll('th.sortable').forEach(h=>h.onclick=()=>{S.netSort=h.dataset.k;render();});
+  const th=(k,l)=>`<th class="sortable" data-k="${k}">${l}${S.netSort===k?(dir<0?' ▾':' ▴'):''}</th>`;
+  const open=S.netOpen||{};
+  t.innerHTML=`<thead><tr>${th('name','Сеть')}${th('bu','Группа')}
+    ${th('all','Категория,<br>MC')}${th('ktg','KT&G,<br>MC')}${th('share','Volume<br>Share, %')}
+    ${th('posAll','ТТ всего,<br>шт')}${th('pos','ТТ с KT&G,<br>шт')}${th('numd','Num Selling<br>Distr, %')}
+    ${th('mom','KT&G к прошл.<br>мес., %')}${th('yoy','KT&G год<br>к году, %')}${th('delta','Вклад,<br>MC')}
+    <th>KT&G, MC<br>12 мес.</th></tr></thead><tbody>`+
+    rows.map(r=>{
+      const op=!!open[r.key];
+      let h=`<tr class="netrow${r.kids?' haskids':''}" data-k="${esc(r.key)}" data-oi="${r.oi===undefined?'':r.oi}">
+        <td class="name">${r.kids?`<span class="tw-caret">${op?'▾':'▸'}</span> `:''}<b>${esc(r.name)}</b>`+
+        `${r.lag?` <span class="lag">(${esc(r.lag)})</span>`:''}${r.agg?'<span class="pill">агрегат</span>':''}</td>`+
+        `<td style="text-align:left">${esc(r.bu)}</td>`+cells(r)+`</tr>`;
+      if(r.kids&&op) r.kids.forEach(k=>{
+        h+=`<tr class="sub netsub" data-oi="${k.oi}"><td class="name">${esc(k.name)}`+
+           `${k.lag?` <span class="lag">(${esc(k.lag)})</span>`:''}</td>`+
+           `<td style="text-align:left">${esc(k.bu)}</td>`+cells(k)+`</tr>`;});
+      return h;
+    }).join('')+`</tbody>`;
+
+  t.querySelectorAll('th.sortable').forEach(h=>h.onclick=()=>{
+    if(S.netSort===h.dataset.k) S.netDir=(dir<0?1:-1); else { S.netSort=h.dataset.k; S.netDir=-1; }
+    render();});
+  t.querySelectorAll('tr.netrow').forEach(tr=>tr.querySelector('td.name').onclick=()=>{
+    const k=tr.dataset.k;
+    if(tr.classList.contains('haskids')){ S.netOpen=S.netOpen||{}; S.netOpen[k]=!S.netOpen[k]; render(); return; }
+    S.net=tr.dataset.oi; document.getElementById('fNet').value=S.net; setTab('Свод');});
+  t.querySelectorAll('tr.netsub').forEach(tr=>tr.querySelector('td.name').onclick=()=>{
+    S.net=tr.dataset.oi; document.getElementById('fNet').value=S.net; setTab('Свод');});
+
   const gb=document.getElementById('netBuChips');
   if(gb){
     const g=(v,l)=>`<button class="chip${gsel===v?' on':''}" data-g="${v}">${esc(l)}</button>`;
     gb.innerHTML=g('','Все группы')+BUS.map((b,i)=>g(String(i),b)).join('');
     gb.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{S.netBu=b.dataset.g;render();});
   }
-  const SORTS=[['ktg','по объёму KT&G'],['share','по доле KT&G'],['mom','по динамике'],
-               ['delta','по вкладу'],['name','по алфавиту']];
-  const sc=document.getElementById('sortChips');
-  sc.innerHTML=SORTS.map(([k,l])=>`<button class="chip${S.netSort===k?' on':''}" data-s="${k}">${l}</button>`).join('');
-  sc.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{S.netSort=b.dataset.s;render();});
-  t.querySelectorAll('tbody tr').forEach(tr=>tr.querySelector('td.name').onclick=()=>{
-    S.net=tr.dataset.oi; document.getElementById('fNet').value=S.net;
-    setTab('Свод'); });                            // клик уводит в Свод по этой сети
-  document.getElementById('capNet').textContent=
+  const sc=document.getElementById('sortChips'); if(sc) sc.innerHTML='';
+  document.getElementById('capNet').innerHTML=
     `${mfull(M[S.month])} · категория «Сигареты» · объёмы в коробках, 1 MC = 500 пачек · `+
-    `фильтры других вкладок здесь не действуют · клик по названию открывает сеть на вкладке «Свод»`;
+    `клик по заголовку столбца сортирует, повторный клик меняет направление · `+
+    `сети с подразделениями (Спар и другие) раскрываются по клику на названии · `+
+    `если за месяц выгрузки нет, показан последний месяц с данными — он указан в скобках · `+
+    `<b>KT&G к прошл. мес.</b> и <b>год к году</b> сравнивают объём KT&G в MC за тот же месяц, `+
+    `<b>вклад</b> — разница в MC, <b>12 мес.</b> — спарклайн объёма KT&G в MC за окно.`;
+}
+
+/* ---------- конкурентное поле ---------- */
+/* ---------- группы ---------- */
+function tblBu(A){
+  const rows=[];
+  const bus=BUS.map((b,i)=>i).filter(bi=>S.bu===''||bi==+S.bu);
+  const totK=bus.reduce((a,b)=>a+((A.byBu[b]||{}).ktg||0),0);
+  bus.forEach(bi=>{
+    const c=A.byBu[bi]||{all:0,ktg:0,unk:0}, p=A.posBu[bi]||{all:0,ktg:0};
+    const gm=(mi,mj)=>{let a=0,b=0,n=0;
+      OFF.forEach((o,oi)=>{ if(buOfOff[oi]!==bi) return;
+        if(!has.has(mi+'|'+oi)||!has.has(mj+'|'+oi)) return;
+        if(A.lfl&&!A.lfl.has(oi)) return;
+        const x=A.byOff[oi]; if(!x) return; n++;
+        if(x[mi])a+=x[mi].ktg; if(x[mj])b+=x[mj].ktg;});
+      return {a,b,n,d:a>0?(b-a)/a:null};};
+    const mom=S.month>0?gm(S.month-1,S.month):{d:null,b:0,a:0};
+    const yoy=S.month>=12?gm(S.month-12,S.month):{d:null};
+    rows.push({name:BUS[bi], ktg:c.ktg, all:c.all, share:c.all?c.ktg/c.all:0,
+      pos:p.ktg, posAll:p.all, mom:mom.d, yoy:yoy.d,
+      delta:mom.d===null?0:mom.b-mom.a, part:totK?c.ktg/totK:0});
+  });
+  rows.sort((x,y)=>y.ktg-x.ktg);
+  const T=(l,v,c)=>`<td data-label="${l}"${c?' class="'+c+'"':''}>${v}</td>`;
+  document.getElementById('tblBu').innerHTML=
+    `<thead><tr><th>Группа</th><th>KT&G, пачек</th><th>Вес, %</th><th>Объём канала, пачек</th>
+      <th>Доля KT&G, %</th><th>Точек с KT&G, шт</th><th>К прошл. мес., %</th><th>Год к году, %</th>
+      <th>Вклад, пачек</th></tr></thead><tbody>`+
+    rows.map(r=>`<tr><td class="name"><b>${esc(r.name)}</b></td>`+
+      T('KT&G, пачек',fmt(r.ktg))+T('Вес, %',pct(r.part))+
+      T('Объём канала, пачек',fmtShort(r.all))+T('Доля KT&G, %',pct(r.share,2))+
+      T('Точек с KT&G, шт',fmt(r.pos))+
+      T('К прошл. мес.',r.mom===null?'—':`<span class="${cls(r.mom)}">${sgn(r.mom)}</span>`)+
+      T('Год к году',r.yoy===null?'—':`<span class="${cls(r.yoy)}">${sgn(r.yoy)}</span>`,'hide-m')+
+      T('Вклад',r.delta?`<span class="${cls(r.delta)}">${fmtShort(r.delta)}</span>`:'—','hide-m')+
+      `</tr>`).join('')+
+    `</tbody><tfoot><tr><td class="name"><b>Итого</b></td>`+
+      T('KT&G, пачек',fmt(rows.reduce((a,r)=>a+r.ktg,0)))+T('Вес, %','100%')+
+      T('Объём канала, пачек',fmtShort(rows.reduce((a,r)=>a+r.all,0)))+
+      T('Доля KT&G',pct(rows.reduce((a,r)=>a+r.ktg,0)/Math.max(1,rows.reduce((a,r)=>a+r.all,0)),2))+
+      T('Точек с KT&G, шт',fmt(rows.reduce((a,r)=>a+r.pos,0)))+T('К прошл. мес., %','')+
+      T('Год к году','','hide-m')+
+      T('Вклад',`<span class="${cls(rows.reduce((a,r)=>a+r.delta,0))}">${fmtShort(rows.reduce((a,r)=>a+r.delta,0))}</span>`,'hide-m')+
+    `</tr></tfoot>`;
+  document.getElementById('capBu').textContent=`${mfull(M[S.month])} · «вклад» — пачки KT&G, добавленные или потерянные к прошлому месяцу`;
+}
+
+
+/* ---------- Performance: таблица мер по эталону куба Iceberg ---------- */
+function daysIn(m){const [y,n]=m.split('-').map(Number);return new Date(y,n,0).getDate();}
+function perfTable(A){
+  const mis=A.mis;
+  const catI = CATI;
+  const catName = CAT[catI]||'(все категории)';
+  // свод по месяцам с учётом фильтров «сеть» и «группа»
+  const agg={};                       // month -> меры
+  let nets=new Set();
+  (D.facts_perf||[]).forEach(r=>{
+    const [m,o,c,qc,qk,pc,pk,cik,spp,nsku]=r;   // r[10..12] — остатки, см. ниже
+    if(c!==catI) return;
+    if(!mis.includes(m)) return;
+    if(!netOk(o)) return;
+    if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
+    if(A.lfl && !A.lfl.has(o)) return;
+    nets.add(o);
+    const a=agg[m]=agg[m]||{qc:0,qk:0,pc:0,pk:0,cik:0,spp:0,sku:new Set(),psk:0,stk:0,stc:0};
+    a.qc+=qc; a.qk+=qk; a.pc+=pc; a.pk+=pk; a.cik+=cik; a.spp+=spp;
+    a.psk+=(r[10]||0); a.stk+=(r[11]||0); a.stc+=(r[12]||0);
+    (nsku||[]).forEach(x=>a.sku.add(x));   // уникальные SKU — объединение, не сумма
+  });
+  const one = nets.size===1;
+  // Sell Out для сравнения с отгрузками — по ВСЕМ категориям: Sell In по категориям не делится
+  const soAll={};
+  D.facts_main.forEach(r=>{
+    if(!mis.includes(r[0])||r[3]!==KI) return;
+    if(!netOk(r[1])) return;
+    if(S.bu!=='' && r[2]!=+S.bu) return;
+    if(A.lfl && !A.lfl.has(r[1])) return;
+    soAll[r[0]]=(soAll[r[0]]||0)+r[6];
+  });
+  // Sell In берём только по сетям, у которых в этом месяце есть скан-данные, — иначе сравнение врёт
+  const siM={};
+  mis.forEach(m=>{
+    let v=0, ok=false;
+    if(isX5()){ v=SIX5[m]||0; ok=true; }
+    else if(S.net!==''){
+      if(X5M.has(+S.net)) { ok=false; }                   // отдельная сеть X5 — отгрузки не делятся
+      else { v=SI[m+'|'+S.net]||0; ok=true; }
+    } else {
+      OFF.forEach((o,oi)=>{
+        if(S.bu!=='' && buOfOff[oi]!=+S.bu) return;
+        if(A.lfl && !A.lfl.has(oi)) return;
+        if(X5M.has(oi)) return;                            // X5 добавим одной строкой ниже
+        v+=SI[m+'|'+oi]||0; ok=true;
+      });
+      if(S.bu===''){ v+=SIX5[m]||0; ok=true; }
+    }
+    siM[m]= ok ? v : undefined;                            // отгрузки идут за все месяцы, где они есть
+  });
+  const x5only = S.net!=='' && S.net!==X5KEY && X5M.has(+S.net);
+  const num=(v,d)=>v===null||v===undefined||!isFinite(v)?'—':
+    (d===0?fmt(v):v.toLocaleString('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d}));
+  const ROWS=[
+    ['grp','Объём'],
+    ['Продажи Категория, MC', m=>agg[m]?num(agg[m].qc/MC,0):'—', 0],
+    ['Продажи KT&G, MC',      m=>agg[m]?num(agg[m].qk/MC,0):'—', 1],
+    ['Volume Share, %',       m=>agg[m]&&agg[m].qc?num(agg[m].qk/agg[m].qc*100,2):'—', 1],
+    ['SiSS, %',               m=>agg[m]&&agg[m].cik?num(agg[m].qk/agg[m].cik*100,2):'—', 1],
+    ['grp','Дистрибуция'],
+    ['К-во ТТ с продажами, Total', m=>agg[m]?num(agg[m].pc,0):'—', 0],
+    ['К-во ТТ с продажами KT&G',   m=>agg[m]?num(agg[m].pk,0):'—', 0],
+    ['Num Selling Distr, %',  m=>agg[m]&&agg[m].pc?num(agg[m].pk/agg[m].pc*100,1):'—', 1],
+    ['VW Selling Distr, %',   m=>agg[m]&&agg[m].qc?num(agg[m].cik/agg[m].qc*100,1):'—', 1],
+    ['К-во ТТ со стоками KT&G', m=>agg[m]&&agg[m].stc?num(agg[m].psk,0):'—', 0],
+    ['Num Stock Distr, %',     m=>agg[m]&&agg[m].stc&&agg[m].pc?num(agg[m].psk/agg[m].pc*100,1):'—', 1],
+    ['grp','Ассортимент и интенсивность'],
+    ['Кол-во уникальных SKU', m=>agg[m]&&agg[m].sku.size?num(agg[m].sku.size,0):'—', 0],
+    ['Среднее кол-во SKU на ТТ', m=>agg[m]&&agg[m].pk?num(agg[m].spp/agg[m].pk,1):'—', 0],
+    ['PPD (by KT&G)',         m=>agg[m]&&agg[m].pk?num(agg[m].qk/agg[m].pk/daysIn(M[m]),1):'—', 1],
+    ['grp','Отгрузки (Sell In)'],
+    ['Sell In, MC', m=>siM[m]===undefined?'—':num(siM[m]/MC,0), 0],
+    ['Sell Out всего, MC', m=>soAll[m]?num(soAll[m]/MC,0):'—', 0],
+    ['Sell Out − Sell In, MC', m=>(siM[m]&&soAll[m])?num((soAll[m]-siM[m])/MC,0):'—', 0],
+    ['Sell Out / Sell In, %', m=>(siM[m]&&soAll[m])?num(soAll[m]/siM[m]*100,0):'—', 1],
+  ];
+  let h='<thead><tr><th class="rowh">Мера</th>'+
+    mis.map(m=>`<th class="num" style="text-align:right">${mlab(M[m])}</th>`).join('')+'</tr></thead><tbody>';
+  ROWS.forEach(r=>{
+    if(r[0]==='grp'){
+      h+=`<tr class="grp"><td class="rowh">${esc(r[1])}</td>`+
+         mis.map(()=>'<td></td>').join('')+'</tr>';
+      return;
+    }
+    const [label,fn,key]=r;
+    h+=`<tr class="${key?'key':''}"><td class="rowh">${esc(label)}</td>`+
+       mis.map(m=>`<td class="num">${fn(m)}</td>`).join('')+'</tr>';
+  });
+  document.getElementById('tblPerf').innerHTML=h+'</tbody>';
+
+  const who = S.net!=='' ? netLabel() : (S.bu!=='' ? BUS[S.bu] : 'канал целиком');
+  document.getElementById('capPerf').textContent =
+    `${who} · категория «${catName}» · ${mis.length} мес. по ${mfull(M[S.month])}`;
+  document.getElementById('perfNote').innerHTML =
+    `1 MC = 500 пачек. <b>SiSS</b> (Share in Shops with Sales) — продажи KT&G ÷ продажи категории `+
+    `в тех точках, где KT&G продавался в этом периоде. Тождество: <b>SiSS = Volume Share ÷ VW Selling Distr</b>. `+
+    `<b>Num Selling Distr</b> считает точки поштучно, <b>VW</b> взвешивает их оборотом категории — `+
+    `разрыв между ними показывает, в тех ли магазинах мы стоим. <b>PPD</b> — пачек KT&G на активную точку в день. `+
+    `<b>Num Stock Distr</b> — точки с остатком KT&G ÷ точки с продажами категории. Прочерк в строках остатков `+
+    `означает, что сеть остатки не присылает, а не что остатков нет.<br>`+
+    `<b>Sell In</b> — наши отгрузки в сеть, пачки, из файла «${esc(D.sellin_path||'Sell In')}». Сравнивается с `+
+    `<b>Sell Out всего</b> — продажами KT&G по всем категориям, потому что отгрузки по категориям не делятся. `+
+    `Отгрузки показываются за все месяцы, где они есть; разница и отношение считаются только там, `+
+    `где есть обе части. `+
+    `<b>Sell Out / Sell In</b> ниже 100 % — товар осел в запасах сети, выше 100 % — сеть продаёт больше, чем мы `+
+    `отгрузили напрямую (распродажа запаса или поставка через дистрибьютора).`+
+    (x5only?` <b>Отгрузки по этой сети пустые:</b> в источнике они приходят одной строкой на всю группу — выбери в фильтре сеть «X5», чтобы увидеть Sell In.`:'');
+
+  // быстрый выбор сети чипами, не открывая фильтры
+  const top=[...new Set((D.facts_perf||[]).filter(r=>r[2]===catI&&r[0]===S.month)
+      .sort((a,b)=>b[4]-a[4]).map(r=>r[1]))].slice(0,12);
+  const box=document.getElementById('perfChips');
+  box.innerHTML=`<button class="chip${S.net===''?' on':''}" data-n="">весь канал</button>`+
+    (X5M.size?`<button class="chip${isX5()?' on':''}" data-n="${X5KEY}">X5 (группа)</button>`:'')+
+    top.map(o=>`<button class="chip${S.net==o?' on':''}" data-n="${o}">${esc(OFF[o])}</button>`).join('');
+  box.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>{
+    S.net=b.dataset.n; document.getElementById('fNet').value=S.net; render();});
+}
+
+
+/* ---------- Volume Share: доли производителей и изменение к прошлому месяцу ---------- */
+function chManuf(A){
+  const box=document.getElementById('chManuf'); box.innerHTML='';
+  // доли текущего и предыдущего месяца по тем же фильтрам
+  const cur={}, prv={};
+  D.facts_main.forEach(r=>{
+    if(!pass(r,A.lfl)) return;
+    if(r[0]===S.month) cur[r[3]]=(cur[r[3]]||0)+r[6];
+    else if(r[0]===S.month-1) prv[r[3]]=(prv[r[3]]||0)+r[6];
+  });
+  const totC=Object.values(cur).reduce((a,b)=>a+b,0)||1;
+  const totP=Object.values(prv).reduce((a,b)=>a+b,0);
+  const rows=Object.entries(cur).map(([mi,q])=>({
+    n:MF[mi], q:+q, sh:q/totC,
+    d: totP? (q/totC)-((prv[mi]||0)/totP) : null
+  })).sort((a,b)=>b.q-a.q);
+
+  const ph=isPhone();
+  const W=ph?560:470, rh=ph?30:26, H=rows.length*rh+18;
+  const L=ph?112:96;                 // подписи слева
+  const SHX=W-118, SEP=W-104, DX=W-96;   // доля | линия | дельта
+  const s=svg(W,H); const max=Math.max(...rows.map(r=>r.sh),0.01);
+  rows.forEach((r,i)=>{
+    const y=i*rh+14, w=(SHX-L-46)*r.sh/max, isK=r.n===KTG;
+    const rect=el('rect',{x:L,y,width:Math.max(2,w),height:ph?17:15,rx:2,
+      fill:isK?cssv('--ktg'):cssv('--s1'),opacity:isK?.95:.45});
+    hover(rect,`<b>${esc(r.n)}</b><br><span class="r">${fmt(r.q/MC)} MC · ${pct(r.sh,2)}</span>`);
+    s.appendChild(rect);
+    s.appendChild(txt(L-8,y+12,r.n.replace(/^\d+\s/,''),isK?'val':'tick','end'));
+    const v=txt(SHX,y+12,pct(r.sh,2),'val','end');
+    if(isK) v.setAttribute('font-weight','600');
+    s.appendChild(v);
+    if(r.d!==null){                                  // изменение доли: заливка + цвет текста
+      const up=r.d>=0, bw2=68, bh=17, bx=W-4-bw2, by=y+1;
+      s.appendChild(el('rect',{x:bx,y:by,width:bw2,height:bh,rx:4,
+        fill:cssv(up?'--good':'--bad'),opacity:.13}));
+      const dl=txt(W-8,y+13,pp(r.d),'val','end');
+      dl.setAttribute('fill',cssv(up?'--good':'--bad'));
+      dl.setAttribute('font-size','11'); dl.setAttribute('font-weight','600');
+      s.appendChild(dl);
+    }
+  });
+  // вертикальная линия между долей и изменением
+  s.appendChild(el('line',{x1:SEP,x2:SEP,y1:8,y2:H-4,stroke:cssv('--grid'),'stroke-width':1}));
+  s.appendChild(txt(SHX,8,'доля','tick','end'));
+  s.appendChild(txt(W-4,8,'к пред. мес.','tick','end'));
+  box.appendChild(s);
+  const cm=document.getElementById('capManuf'); if(cm){ cm.textContent=''; cm.style.display='none'; }
+  const lg=document.getElementById('lgManuf'); if(lg) lg.innerHTML='';
 }
 
 /* ---------- регионы ---------- */
@@ -1392,7 +1483,7 @@ function render(){
   const A=build();
   chips(A);
   const tab=S.tab;
-  if(tab==='Паспорт'){ passport(A); kpis(A); trend(A); tblBu(A); chManuf(A); }
+  if(tab==='Паспорт'){ passport(A); kpis(A); trend(A); chManuf(A); }
   else if(tab==='Свод'){ kooTable(); }
   else if(tab==='Сети'){ tblNet(A); }
   else if(tab==='SKU'){ tblSku(A); }
