@@ -15,6 +15,8 @@
   --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300;
   --s7:#4a3aa7; --s8:#e34948; --good:#006300; --bad:#d03b3b; --seq:#2a78d6; --ktg:#008300;
   --tap:44px;
+  --agg:rgba(11,11,11,.045);        /* заливка агрегирующих колонок */
+  --aggline:rgba(11,11,11,.20);
 }
 @media (prefers-color-scheme: dark){
   :root[data-theme="auto"]{
@@ -23,6 +25,7 @@
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.06);
     --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300;
     --s7:#9085e9; --s8:#e66767; --good:#0ca30c; --bad:#e05555; --seq:#3987e5; --ktg:#0ca30c;
+    --agg:rgba(255,255,255,.055); --aggline:rgba(255,255,255,.22);
   }
 }
 :root[data-theme="dark"]{
@@ -31,6 +34,7 @@
   --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.06);
   --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300;
   --s7:#9085e9; --s8:#e66767; --good:#0ca30c; --bad:#e05555; --seq:#3987e5; --ktg:#0ca30c;
+  --agg:rgba(255,255,255,.055); --aggline:rgba(255,255,255,.22);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth}
@@ -118,7 +122,15 @@ table.perf tr.grp td,table.perf tr.grp th{background:var(--wash);font-weight:620
   font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 table.perf td.num{text-align:right;font-variant-numeric:tabular-nums}
 table.perf tr.key td.num{font-weight:620;color:var(--ink)}
+table.koo thead th{background:var(--wash)}
+table.koo td.agg{background:var(--agg)}
+table.koo th.agg{background:var(--agg)}
+table.koo td.dv,table.koo th.dv{box-shadow:inset 1px 0 0 var(--aggline)}
+table.koo tr.grp td{background:var(--wash);font-weight:620;color:var(--ink);
+  font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 table.koo tr.ttl td,table.koo tr.ttl td.rowh{font-weight:640;background:var(--wash);color:var(--ink)}
+table.koo tr.ttl td.agg{background:var(--agg)}
+table.koo tr.grand td.agg{background:var(--agg)}
 table.koo tr.grand td,table.koo tr.grand td.rowh{font-weight:660;border-top:1px solid var(--axis)}
 table.koo td.pos{color:var(--good)} table.koo td.neg{color:var(--bad)}
 @media(max-width:760px){
@@ -772,29 +784,57 @@ function siOf(name,mi){                       // отгрузки сети за 
   return o?(o[mi]||0):0;
 }
 const KOO_MEASURES=[
-  ['sellin','Отгрузки (Sell In), MC'],
-  ['sellout','Продажи KT&G, MC'],
-  ['cat','Продажи Категория, MC'],
-  ['share','Доля KT&G, %'],
+  ['grp','Объём'],
+  ['cat',     'Продажи Категория, MC',     'sum',   'mc'],
+  ['sellout', 'Продажи KT&G, MC',          'sum',   'mc'],
+  ['share',   'Volume Share, %',           'ratio', 'pct2'],
+  ['siss',    'SiSS, %',                   'ratio', 'pct2'],
+  ['grp','Дистрибуция'],
+  ['posall',  'К-во ТТ с продажами, Total','avg',   'int'],
+  ['posktg',  'К-во ТТ с продажами KT&G',  'avg',   'int'],
+  ['numd',    'Num Selling Distr, %',      'ratio', 'pct1'],
+  ['vwd',     'VW Selling Distr, %',       'ratio', 'pct1'],
+  ['posstock','К-во ТТ со стоками KT&G',   'avg',   'int'],
+  ['numstock','Num Stock Distr, %',        'ratio', 'pct1'],
+  ['grp','Ассортимент и интенсивность'],
+  ['sku',     'Кол-во уникальных SKU',     'uniq',  'int'],
+  ['skupos',  'Среднее кол-во SKU на ТТ',  'ratio', 'num1'],
+  ['ppd',     'PPD (by KT&G)',             'ratio', 'num1'],
+  ['grp','Отгрузки (Sell In)'],
+  ['sellin',  'Sell In, MC',               'sum',   'mc'],
 ];
 function kooTable(){
-  const cur=M[S.month], year=cur.slice(0,4), mnum=+cur.slice(5);
-  const meas=S.kooM||'sellin';
+  const cur=M[S.month], year=+cur.slice(0,4), mnum=+cur.slice(5);
   const catI = S.cat!=='' ? +S.cat : CAT.indexOf('Сигареты');
-  // продажи по сетям из того же куба, что кормит Performance
-  const SO={}, CATV={};
+
+  // сети текущего среза: фильтр «Сеть» (в т.ч. X5) и «Группа» (FKA 1/2/3)
+  const nets=[];
+  OFF.forEach((o,oi)=>{ if(!netOk(oi)) return;
+    if(S.bu!=='' && buOfOff[oi]!=+S.bu) return; nets.push(oi); });
+  const netNames=nets.map(oi=>OFF[oi]);
+  const x5In = nets.some(oi=>X5M.has(oi));
+
+  const P={};
   (D.facts_perf||[]).forEach(r=>{
-    const [m,o,c,qc,qk]=r;
-    if(c!==catI) return;
-    SO[m+'|'+o]=(SO[m+'|'+o]||0)+qk;
-    CATV[m+'|'+o]=(CATV[m+'|'+o]||0)+qc;
+    const [m,o,c,qc,qk,pc,pk,cik,spp,sk,psk,stk,stc]=r;
+    if(c!==catI || !nets.includes(o)) return;
+    const a=P[m]||(P[m]={qc:0,qk:0,pc:0,pk:0,cik:0,spp:0,psk:0,stc:0,sku:new Set()});
+    a.qc+=qc; a.qk+=qk; a.pc+=pc; a.pk+=pk; a.cik+=cik; a.spp+=spp; a.psk+=psk; a.stc+=stc;
+    (sk||[]).forEach(x=>a.sku.add(x));
   });
-  const X5arr=[...X5M];
-  const pick=(src,n,mi)=>{
-    if(n==='F_X5') return X5arr.reduce((a,o)=>a+(src[mi+'|'+o]||0),0);
-    const oi=OFF.indexOf(n);
-    return oi>=0 ? (src[mi+'|'+oi]||0) : 0;
+  const sellinM=mi=>{                       // отгрузки по срезу: X5 одной строкой, остальные — по сети
+    let v=0;
+    nets.forEach(oi=>{ if(!X5M.has(oi)) v+=SI[mi+'|'+oi]||0; });
+    if(x5In) v+=SIX5[mi]||0;
+    return v;
   };
+  const NUM={ sellin:(a,mi)=>sellinM(mi), sellout:a=>a.qk, cat:a=>a.qc, share:a=>a.qk,
+    siss:a=>a.qk, posall:a=>a.pc, posktg:a=>a.pk, numd:a=>a.pk, vwd:a=>a.cik,
+    posstock:a=>a.stc?a.psk:0, numstock:a=>a.stc?a.psk:0, sku:a=>a.sku.size,
+    skupos:a=>a.spp, ppd:a=>a.qk };
+  const DEN={ share:a=>a.qc, siss:a=>a.cik, numd:a=>a.pc, vwd:a=>a.qc,
+    numstock:a=>a.stc?a.pc:0, skupos:a=>a.pk, ppd:(a,mi)=>a.pk*daysIn(M[mi]) };
+
   const idx={}; M.forEach((m,i)=>idx[m]=i);
   const mThis=[], mLast=[];
   for(let k=1;k<=mnum;k++){
@@ -802,95 +842,107 @@ function kooTable(){
     mThis.push(idx[a]===undefined?null:idx[a]);
     mLast.push(idx[b]===undefined?null:idx[b]);
   }
-  // значение меры для сети за один месяц: числитель и знаменатель, чтобы доли считались по сумме
-  const num1=(n,mi)=> meas==='sellin' ? siOf(n,mi)
-                    : meas==='cat'    ? pick(CATV,n,mi)
-                    :                   pick(SO,n,mi);
-  const den1=(n,mi)=> meas==='share' ? pick(CATV,n,mi) : 0;
-  const val=(n,list)=>list.reduce((a,i)=>a+(i===null?0:num1(n,i)),0);
-  const valD=(n,list)=>list.reduce((a,i)=>a+(i===null?0:den1(n,i)),0);
-  const known=new Set([...KOO_BIG6,...KOO_OTHERS]);
-  const rest=[...OFF.filter(o=>!known.has(o)&&!X5M.has(OFF.indexOf(o))),
-              ...Object.keys(SIOTHER).filter(n=>!known.has(n))];
-  const row=n=>{
-    const per=mThis.map(i=>i===null?null:num1(n,i));
-    const perD=mThis.map(i=>i===null?null:den1(n,i));
-    const cum=val(n,mThis), ly=val(n,mLast);
-    const cumD=valD(n,mThis), lyD=valD(n,mLast);
-    const lmCum=cum-(per.length?(per[per.length-1]||0):0);
-    const lmCumD=cumD-(perD.length?(perD[perD.length-1]||0):0);
-    const lastM=per.length>1?(per[per.length-2]||0):0;
-    const lastMD=perD.length>1?(perD[perD.length-2]||0):0;
-    return {n, per, perD, cum, ly, cumD, lyD, lastM, lastMD, lmCum, lmCumD};
+  const EMPTY={qc:0,qk:0,pc:0,pk:0,cik:0,spp:0,psk:0,stc:0,sku:new Set()};
+  const one=(key,mi)=>{
+    if(mi===null) return null;
+    const a=P[mi]||EMPTY;
+    const has = key==='sellin' ? (sellinM(mi)>0) : (a.qc>0||a.qk>0);
+    if(!has) return null;
+    return {v:(NUM[key])(a,mi), d:DEN[key]?DEN[key](a,mi):0, set:key==='sku'?a.sku:null};
   };
-  const sum=(rows)=>{
-    const per=mThis.map((_,k)=>rows.reduce((a,r)=>a+(r.per[k]||0),0));
-    const perD=mThis.map((_,k)=>rows.reduce((a,r)=>a+(r.perD[k]||0),0));
-    const cum=rows.reduce((a,r)=>a+r.cum,0), ly=rows.reduce((a,r)=>a+r.ly,0);
-    const cumD=rows.reduce((a,r)=>a+r.cumD,0), lyD=rows.reduce((a,r)=>a+r.lyD,0);
-    const lmCum=cum-(per.length?(per[per.length-1]||0):0);
-    const lmCumD=cumD-(perD.length?(perD[perD.length-1]||0):0);
-    const lastM=per.length>1?(per[per.length-2]||0):0;
-    const lastMD=perD.length>1?(perD[perD.length-2]||0):0;
-    return {per, perD, cum, ly, cumD, lyD, lastM, lastMD, lmCum, lmCumD};
+  const roll=(key,kind,list)=>{
+    let v=0,d=0,cnt=0; const set=new Set(); let any=false;
+    list.forEach(mi=>{const o=one(key,mi); if(!o) return; any=true;
+      v+=o.v; d+=o.d; cnt++; if(o.set) o.set.forEach(x=>set.add(x));});
+    if(!any) return null;
+    if(kind==='sum')  return v;
+    if(kind==='avg')  return cnt? v/cnt : null;
+    if(kind==='uniq') return set.size;
+    return d? v/d : null;
   };
-  const big=KOO_BIG6.map(row), oth=KOO_OTHERS.map(row), rst=rest.map(row).filter(r=>r.cum||r.ly);
-  const bigT=sum(big), othT=sum(oth), rstT=sum(rst), all=sum([...big,...oth,...rst]);
-  const tot=sum([...big,...oth]);
+  const monthly=(key,kind,mi)=>{
+    const o=one(key,mi); if(!o) return null;
+    if(kind==='sum'||kind==='avg') return o.v;
+    if(kind==='uniq') return o.set?o.set.size:null;
+    return o.d? o.v/o.d : null;
+  };
 
-  const isShare = meas==='share';
-  const MCn=v=>v?nf.format(Math.round(v/MC)):'0';
-  const shn=(a,b)=>b?((a/b*100).toFixed(2).replace('.',',')+'%'):'—';
-  const cell=(a,b)=>isShare?shn(a,b):MCn(a);
-  const progHtml=r=>{
-    if(isShare){
-      if(!r.cumD||!r.lyD) return '—';
-      const d=(r.cum/r.cumD)-(r.ly/r.lyD);
-      return `<span class="${d>=0?'up':'down'}">${pp(d)}</span>`;
-    }
-    if(!r.ly) return '—';
-    const v=r.cum/r.ly;
-    return `<span class="${v>=1?'up':'down'}">${(v*100).toFixed(0)}%</span>`;
+  const fmtOf=(fk,v)=>{
+    if(v===null||v===undefined||!isFinite(v)) return '—';
+    if(fk==='mc')   return nf.format(Math.round(v/MC));
+    if(fk==='int')  return nf.format(Math.round(v));
+    if(fk==='num1') return v.toFixed(1).replace('.',',');
+    if(fk==='pct1') return (v*100).toFixed(1).replace('.',',');
+    if(fk==='pct2') return (v*100).toFixed(2).replace('.',',');
+    return nf.format(Math.round(v));
   };
-  const cells=r=>`<td class="num">${cell(r.lmCum,r.lmCumD)}</td><td class="num">${cell(r.lastM,r.lastMD)}</td>`+
-    r.per.map((v,k)=>`<td class="num">${v===null?'—':cell(v,r.perD[k])}</td>`).join('')+
-    `<td class="num">${cell(r.cum,r.cumD)}</td><td class="num">${cell(r.ly,r.lyD)}</td>`+
-    `<td class="num">${progHtml(r)}</td>`;
-  const label=n=>`<td class="rowh">${esc(n)}</td>`;
-  let h=`<thead><tr><th class="rowh">Сеть</th>
-      <th class="num">LM Cum.<br>(1M~${Math.max(1,mnum-1)}M)</th>
-      <th class="num">Last M.<br>(${Math.max(1,mnum-1)}M)</th>`+
-      mThis.map((_,k)=>`<th class="num">${MON[k]}</th>`).join('')+
-      `<th class="num">Cum.<br>(1M~${mnum}M)</th><th class="num">LY<br>(1~${mnum}M)</th>
-       <th class="num">${isShare?'Δ п.п.':'Progress'}</th></tr></thead><tbody>`;
-  big.forEach(r=>h+=`<tr>${label(r.n)}${cells(r)}</tr>`);
-  h+=`<tr class="ttl">${label('Big 6 TTL')}${cells(bigT)}</tr>`;
-  oth.forEach(r=>h+=`<tr>${label(r.n)}${cells(r)}</tr>`);
-  h+=`<tr class="ttl">${label('FC Others TTL')}${cells(othT)}</tr>`;
-  h+=`<tr class="grand">${label('Total (как в отчёте)')}${cells(tot)}</tr>`;
-  if(rst.length){
-    h+=`<tr class="ttl">${label('Сети вне отчёта — '+rst.length+' шт.')}${cells(rstT)}</tr>`;
-    h+=`<tr class="grand">${label('Итого по всем сетям')}${cells(all)}</tr>`;
-  }
+  const progOf=(fk,cum,ly)=>{
+    if(cum===null||ly===null||!isFinite(cum)||!isFinite(ly)) return '—';
+    if(fk==='pct1'||fk==='pct2'){const d=cum-ly;return `<span class="${d>=0?'up':'down'}">${pp(d)}</span>`;}
+    if(!ly) return '—';
+    const v=cum/ly; return `<span class="${v>=1?'up':'down'}">${(v*100).toFixed(0)}%</span>`;
+  };
+
+  let h=`<thead><tr><th class="rowh">Мера</th>
+      <th class="num agg">LM Cum.<br>(1M~${Math.max(1,mnum-1)}M)</th>
+      <th class="num agg dv">Last M.<br>(${Math.max(1,mnum-1)}M)</th>`+
+      mThis.map((_,k)=>`<th class="num${k===0?' dv':''}">${MON[k]}</th>`).join('')+
+      `<th class="num agg dv">Cum.<br>(1M~${mnum}M)</th>
+       <th class="num agg dv">LY<br>(1~${mnum}M)</th>
+       <th class="num agg dv">Progress</th></tr></thead><tbody>`;
+  KOO_MEASURES.forEach(row=>{
+    if(row[0]==='grp'){
+      h+=`<tr class="grp"><td class="rowh">${esc(row[1])}</td>`+
+         `<td class="agg"></td><td class="agg dv"></td>`+
+         mThis.map((_,k)=>`<td${k===0?' class="dv"':''}></td>`).join('')+
+         `<td class="agg dv"></td><td class="agg dv"></td><td class="agg dv"></td></tr>`;
+      return;
+    }
+    const [key,label,kind,fk]=row;
+    const per=mThis.map(mi=>monthly(key,kind,mi));
+    const cum=roll(key,kind,mThis), ly=roll(key,kind,mLast), lm=roll(key,kind,mThis.slice(0,-1));
+    const lastM=per.length>1?per[per.length-2]:null;
+    h+=`<tr><td class="rowh">${esc(label)}</td>`+
+       `<td class="num agg">${fmtOf(fk,lm)}</td>`+
+       `<td class="num agg dv">${fmtOf(fk,lastM)}</td>`+
+       per.map((v,k)=>`<td class="num${k===0?' dv':''}">${fmtOf(fk,v)}</td>`).join('')+
+       `<td class="num agg dv">${fmtOf(fk,cum)}</td>`+
+       `<td class="num agg dv">${fmtOf(fk,ly)}</td>`+
+       `<td class="num agg dv">${progOf(fk,cum,ly)}</td></tr>`;
+  });
   document.getElementById('tblKoo').innerHTML=h+'</tbody>';
+
+  const who = S.net!=='' ? netLabel() : (S.bu!=='' ? `Итого по ${BUS[S.bu]}` : 'Итого по всем сетям');
   document.getElementById('capKoo').textContent=
-    `${(KOO_MEASURES.find(x=>x[0]===meas)||['',''])[1]} · категория «${CAT[catI]||''}» · `+
-    `${year} год, ${mnum} мес. · сравнение с тем же периодом ${year-1}`;
+    `${who} · категория «${CAT[catI]||''}» · ${year} год, ${mnum} мес. · сравнение с тем же периодом ${year-1}`;
   document.getElementById('kooNote').innerHTML=
-    `Отгрузки KT&G в MC, 1 MC = 500 пачек. Источник — «${esc(D.sellin_path||'Sell In')}».<br>`+
-    `<b>LM Cum.</b> — накопительно с января по предыдущий месяц. <b>Last M.</b> — последний закрытый месяц. `+
-    `<b>Cum.</b> — накопительно с января по отчётный месяц включительно. <b>LY</b> — тот же период прошлого года. `+
-    `<b>Progress</b> = Cum. ÷ LY: выше 100 % — растём к прошлому году, ниже — отстаём.<br>`+
-    `Меры переключаются чипами: отгрузки, продажи KT&G, объём категории и доля — строки и колонки те же. `+
-    `Для доли накопление считается как сумма KT&G ÷ сумма категории за период, а не среднее по месяцам, `+
-    `и сравнение с прошлым годом даётся в пунктах. `+
-    `<b>F_X5</b> — Пятёрочка, Перекрёсток и Чижик одной строкой: в источнике отгрузки по ним не разделены. `+
-    `Строки «Сети вне отчёта» и «Итого по всем сетям» добавлены сверх образца: без них итог не покрывает `+
-    `все сети, куда мы отгружаем.`;
+    `Меры те же, что на вкладке Performance; колонки — как в месячном отчёте. 1 MC = 500 пачек.<br>`+
+    `<b>LM Cum.</b> — накопительно с января по предыдущий месяц, <b>Last M.</b> — последний закрытый месяц, `+
+    `<b>Cum.</b> — с января по отчётный месяц, <b>LY</b> — тот же период прошлого года, `+
+    `<b>Progress</b> — Cum. ÷ LY, а для долей — разница в пунктах.<br>`+
+    `Свод считается по правилу меры: объёмы суммируются; доли — отношение сумм за период, а не среднее `+
+    `месячных долей; точки — среднее по месяцам с данными (одна точка торгует каждый месяц, складывать нельзя); `+
+    `уникальные SKU — объединение за период. `+
+    `Отгрузки по группе X5 не делятся между Пятёрочкой, Перекрёстком и Чижиком: выбери «X5», чтобы их увидеть.`;
+
+  // выбор среза: итоги, группы FKA, X5 и сети
+  const top=[...new Set((D.facts_perf||[]).filter(r=>r[2]===catI&&r[0]===S.month)
+      .sort((a,b)=>b[4]-a[4]).map(r=>r[1]))].slice(0,12);
+  const cur2=(S.net===''&&S.bu==='')?'all':(S.net!==''?'n'+S.net:'b'+S.bu);
+  const chip=(id,lab)=>`<button class="chip${cur2===id?' on':''}" data-s="${id}">${esc(lab)}</button>`;
   const box=document.getElementById('kooChips');
-  box.innerHTML=KOO_MEASURES.map(([k,l])=>
-      `<button class="chip${meas===k?' on':''}" data-k="${k}">${esc(l)}</button>`).join('');
-  box.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ S.kooM=b.dataset.k; render(); });
+  box.innerHTML=chip('all','Итого по всем сетям')+
+    BUS.map((b,i)=>chip('b'+i,'Итого по '+b)).join('')+
+    (X5M.size?chip('n'+X5KEY,'X5'):'')+
+    top.filter(o=>!X5M.has(o)).map(o=>chip('n'+o,OFF[o])).join('');
+  box.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
+    const v=b.dataset.s;
+    if(v==='all'){ S.net=''; S.bu=''; }
+    else if(v[0]==='b'){ S.bu=v.slice(1); S.net=''; }
+    else { S.net=v.slice(1); S.bu=''; }
+    document.getElementById('fNet').value=S.net;
+    document.getElementById('fBu').value=S.bu;
+    render();});
 }
 
 /* ---------- сети ---------- */
