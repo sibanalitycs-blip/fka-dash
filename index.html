@@ -261,6 +261,7 @@ table.koo td.pos{color:var(--good)} table.koo td.neg{color:var(--bad)}
 /* ---------- фильтры ---------- */
 .chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 0 10px}
 .chips::-webkit-scrollbar{display:none}
+.chipsep{display:inline-block;width:1px;height:22px;background:var(--line);margin:0 4px;flex:0 0 auto}
 .chip{flex:0 0 auto;height:30px;padding:0 11px;border-radius:99px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink2);font-size:12.5px;display:inline-flex;align-items:center;gap:6px;
   cursor:pointer;white-space:nowrap}
@@ -430,15 +431,15 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
     </div>
   </section>
 
-  <section id="t-карта" hidden>
+  <section id="t-бкг" hidden>
     <div class="card">
       <h2>Продажи KT&G и доля KT&G</h2>
       <div class="cap" id="capMap"></div>
       <div class="chips" id="mapChips"></div>
       <div id="chMap"></div>
-      <h2 class="mt">Размер категории и доля KT&G</h2>
-      <div class="cap" id="capMap2"></div>
-      <div id="chMap2"></div>
+      <h2 class="mt">БКГ — оценка возможностей</h2>
+      <div class="cap" id="capMap3"></div>
+      <div id="chMap3"></div>
       <div class="note" id="mapNote"></div>
     </div>
   </section>
@@ -523,7 +524,7 @@ const mlab=m=>{const [y,n]=m.split('-');return MON[+n-1]+' '+y.slice(2);};
 const mfull=m=>{const [y,n]=m.split('-');return MON[+n-1]+' '+y;};
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const cls=x=>x>=0?'up':'down';
-const TABS=['Сети','Паспорт','Свод','SKU','Карта','Регионы','Внимание','Данные'];
+const TABS=['Сети','Паспорт','Свод','SKU','БКГ','Регионы','Внимание','Данные'];
 
 const S={month:M.length-1, win:12, bu:'', net:'', cat:'', seg:'', lfl:false,
          netSort:'ktg', tab:'Сети', cmp:'lm_pm'};
@@ -1458,7 +1459,12 @@ function bubbleMap(A){
   const COLBU={'FKA 1':'--grp1b','FKA 2':'--grp2b','FKA 3':'--grp3b'};
 
   // одна отрисовка на обе диаграммы: меняются только ось X и мера размера пузыря
-  function draw(boxId, xOf, sizeOf, xLab, sizeLab){
+  const med=a=>{const b=[...a].sort((x,y)=>x-y); const n=b.length; if(!n) return 0;
+    return n%2? b[(n-1)/2] : (b[n/2-1]+b[n/2])/2;};
+  const thrMode=S.bcgThr||'avg';                 // 'avg' — средние по сетям, 'med' — медианы
+  const avg=a=>a.length? a.reduce((x,y)=>x+y,0)/a.length : 0;
+
+  function draw(boxId, xOf, sizeOf, xLab, sizeLab, bcg){
     const box=document.getElementById(boxId); if(!box) return; box.innerHTML='';
     const W=Math.max(600,Math.round(box.getBoundingClientRect().width)||980), H=ph?420:520;
     const L=64, R=28, T=24, B=52;
@@ -1477,6 +1483,41 @@ function bubbleMap(A){
     s.appendChild(txt(L,H-8,xLab+' →','tick','start'));
     const yl=txt(0,0,'Volume Share KT&G, % ↑','tick','start');
     yl.setAttribute('transform',`translate(14,${H-B}) rotate(-90)`); s.appendChild(yl);
+    // осевые линии БКГ рисуются только на третьей диаграмме
+    if(bcg){
+    const xs=rows.map(xOf), ys=rows.map(r=>r.sh);
+    const tx=thrMode==='med'? med(xs) : avg(xs);
+    const ty=thrMode==='med'? med(ys) : avg(ys);
+    const TX=x(tx), TY=y(ty);
+    [[TX,T,TX,H-B],[L,TY,W-R,TY]].forEach(([x1,y1,x2,y2])=>
+      s.appendChild(el('line',{x1,y1,x2,y2,stroke:cssv('--ink'),'stroke-width':1.3,
+        'stroke-dasharray':'5 4',opacity:.45})));
+    const cnt=(fx,fy)=>rows.filter(r=>fx(xOf(r)) && fy(r.sh)).length;
+    const lo=(v,t)=>v<t, hi=(v,t)=>v>=t;
+    const QD=[
+      ['Трудные дети', L+10,        T+16,       'start', cnt(v=>lo(v,tx), v=>hi(v,ty))],
+      ['Звёзды',       W-R-10,      T+16,       'end',   cnt(v=>hi(v,tx), v=>hi(v,ty))],
+      ['Собаки',       L+10,        H-B-42,     'start', cnt(v=>lo(v,tx), v=>lo(v,ty))],
+      ['Дойные коровы',W-R-10,      H-B-42,     'end',   cnt(v=>hi(v,tx), v=>lo(v,ty))],
+    ];
+    QD.forEach(([lab,px,py,anch,n])=>{
+      const q=txt(px,py,`${lab} · ${n}`,'tick',anch);
+      q.setAttribute('font-size','12'); q.setAttribute('font-weight','700');
+      q.setAttribute('opacity','.5'); q.setAttribute('pointer-events','none');
+      q.setAttribute('stroke',cssv('--surface')); q.setAttribute('stroke-width','4');
+      q.setAttribute('paint-order','stroke fill');
+      s.appendChild(q);
+    });
+    const thrLab=txt(TX+5,H-B-26,`${thrMode==='med'?'медиана':'среднее'} ${fmtShort(tx)} MC`,'tick','start');
+    thrLab.setAttribute('font-size','9.5'); thrLab.setAttribute('opacity','.7');
+    thrLab.setAttribute('stroke',cssv('--surface')); thrLab.setAttribute('stroke-width','3.5');
+    thrLab.setAttribute('paint-order','stroke fill'); s.appendChild(thrLab);
+    const thrLab2=txt(W-R-6,TY-5,`${thrMode==='med'?'медиана':'среднее'} доли ${pct(ty,2)}`,'tick','end');
+    thrLab2.setAttribute('font-size','9.5'); thrLab2.setAttribute('opacity','.7');
+    thrLab2.setAttribute('stroke',cssv('--surface')); thrLab2.setAttribute('stroke-width','3.5');
+    thrLab2.setAttribute('paint-order','stroke fill'); s.appendChild(thrLab2);
+    }
+
     const placed=[];
     rows.forEach(r=>{
       const cx=x(xOf(r)), cy=y(r.sh), rr=rad(sizeOf(r));
@@ -1502,27 +1543,39 @@ function bubbleMap(A){
     return {xLab,sizeLab};
   }
 
-  draw('chMap',  r=>r.ktg, r=>r.cat, 'KT&G Sell Out, MC', 'объём категории');
-  draw('chMap2', r=>r.cat, r=>r.ktg, 'Категория, MC',     'продажи KT&G');
+  draw('chMap',  r=>r.ktg, r=>r.cat, 'KT&G Sell Out, MC', 'объём категории', false);
+  draw('chMap3', r=>r.cat, r=>r.ktg, 'Категория, MC',     'продажи KT&G',    true);
 
   const cm=document.getElementById('mapChips');
   if(cm){
     cm.innerHTML=[['','Все группы'],[0,'FKA 1'],[1,'FKA 2'],[2,'FKA 3']]
       .map(([k,l])=>`<button class="chip${String(S.bu)===String(k)?' on':''}" data-bu="${k}">${l}</button>`).join('')+
-      `<button class="chip${S.mapZero?' on':''}" data-zero="1">Показывать сети без KT&G</button>`;
+      `<button class="chip${S.mapZero?' on':''}" data-zero="1">Показывать сети без KT&G</button>`+
+      `<span class="chipsep"></span>`+
+      [['avg','Пороги: средние'],['med','Пороги: медианы']].map(([k,l])=>
+        `<button class="chip${(S.bcgThr||'avg')===k?' on':''}" data-thr="${k}">${l}</button>`).join('');
     cm.querySelectorAll('[data-bu]').forEach(b=>b.onclick=()=>{S.bu=b.dataset.bu; syncNetSelect(); render();});
     cm.querySelectorAll('[data-zero]').forEach(b=>b.onclick=()=>{S.mapZero=!S.mapZero; render();});
+    cm.querySelectorAll('[data-thr]').forEach(b=>b.onclick=()=>{S.bcgThr=b.dataset.thr; render();});
   }
   const base=`${mfull(M[S.month])} · ${rows.length} сетей · если за месяц выгрузки нет, взят последний месяц сети (в скобках)`;
   document.getElementById('capMap').textContent =
     `ось X — продажи KT&G в MC, ось Y — Volume Share, размер пузыря — объём категории сети · ${base}`;
-  document.getElementById('capMap2').textContent =
-    `ось X — объём категории в MC, ось Y — Volume Share, размер пузыря — продажи KT&G · ${base}`;
+  document.getElementById('capMap3').textContent =
+    `та же карта, разрезанная порогами на четыре квадранта БКГ · ось X — объём категории в MC, `+
+    `ось Y — Volume Share, размер пузыря — продажи KT&G · ${base}`;
+  const shCh=rows.reduce((a,r)=>a+r.ktg,0)/Math.max(1,rows.reduce((a,r)=>a+r.cat,0));
   document.getElementById('mapNote').innerHTML=
-    `Каждая точка — сеть канала, цвет — группа. `+
+    `Каждая точка — сеть канала, цвет — группа. Пунктир делит поле на четыре квадранта БКГ: `+
+    `<b>звёзды</b> — объём и доля выше порога, <b>трудные дети</b> — доля есть, объёма нет, `+
+    `<b>дойные коровы</b> — объём есть, доля ниже порога, <b>собаки</b> — ни того, ни другого. `+
+    `Пороги считаются по сетям, попавшим на диаграмму, и пересчитываются под фильтр группы. `+
+    `<b>Осторожно со средним:</b> продажи по сетям распределены крайне неравномерно, среднее `+
+    `тянут вверх 3–4 сети, поэтому в правой половине оказывается меньше сетей, чем в левой; `+
+    `переключатель «медианы» делит канал ровно пополам. Средняя доля по сетям (${pct(rows.reduce((a,r)=>a+r.sh,0)/Math.max(1,rows.length),2)}) `+
+    `выше доли канала (${pct(shCh,2)}): канал считается по объёму, а среднее — по сетям, и мелкие сети с высокой долей его завышают. `+
     `Первая диаграмма отвечает на вопрос «сколько мы там продаём и какую долю держим», `+
-    `вторая — «какой в сети рынок и какую долю мы от него берём»: правый нижний угол второй `+
-    `диаграммы — самый большой невзятый потенциал канала. `+
+    `вторая раскладывает сети по квадрантам БКГ. `+
     `Сети, у которых выгрузка заканчивается раньше (Пятёрочка и Перекрёсток — февралём), показаны `+
     `по своему последнему месяцу, он указан в скобках у названия. `+
     (S.mapZero?``:`Сети с нулевыми продажами KT&G скрыты — включи чип, чтобы увидеть их на нулевой оси. `)+
@@ -2024,7 +2077,7 @@ function render(){
   else if(tab==='Свод'){ kooTable(); }
   else if(tab==='Сети'){ tblNet(A); }
   else if(tab==='SKU'){ tblSku(A); }
-  else if(tab==='Карта'){ bubbleMap(A); }
+  else if(tab==='БКГ'){ bubbleMap(A); }
   else if(tab==='Регионы'){ tblReg(A); }
   else if(tab==='Внимание'){ alerts(A); }
   else if(tab==='Данные'){ cover(A); }   // обе — без фильтров, см. cover()
