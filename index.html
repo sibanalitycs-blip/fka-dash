@@ -143,7 +143,7 @@ table.perf tr.key td.num{font-weight:620;color:var(--ink)}
 .svod{display:flex;gap:14px;align-items:flex-start}
 .pasbody{flex:1 1 auto;min-width:0}
 .tierrow{display:grid;
-  grid-template-columns:minmax(0,0.52fr) minmax(0,0.66fr) minmax(0,0.55fr) 330px;
+  grid-template-columns:repeat(4,minmax(0,1fr));
   gap:10px;align-items:stretch;margin-bottom:12px}
 .kpis.kpi3{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:0;gap:8px}
 .kpis.kpi3{gap:6px}
@@ -166,10 +166,8 @@ table.cmptbl td.num,table.cmptbl th.num{text-align:right;font-variant-numeric:ta
 .vsblock{margin-bottom:0;display:flex;flex-direction:column}
 .vsblock #chManuf{flex:1 1 auto;display:flex;align-items:stretch}
 .vsblock #chManuf svg{height:100%}
-@media(max-width:1700px){.tierrow{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 340px}
-  .okrblock{grid-column:1/-1}}
-@media(max-width:1350px){.tierrow{grid-template-columns:minmax(0,1fr) 340px}
-  .cmpblock,.okrblock{grid-column:1/-1}}
+@media(max-width:1500px){.tierrow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.tierrow{grid-template-columns:1fr}}
 @media(max-width:1100px){.tierrow{grid-template-columns:1fr}}
 .pasrow .netlist{max-height:78vh}
 .pashdr{font-size:19px;font-weight:660;letter-spacing:-.01em;margin:2px 0 10px}
@@ -384,6 +382,12 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
           <div class="legend" id="lgCat"></div>
         </div>
         <div class="card">
+          <h2>Volume Share по производителям — динамика</h2>
+          <div class="cap" id="capVsd"></div>
+          <div id="chVsd"></div>
+          <div class="legend" id="lgVsd"></div>
+        </div>
+        <div class="card">
           <h2>Sell In и Sell Out</h2>
           <div class="cap" id="capSio"></div>
           <div id="chSio"></div>
@@ -422,6 +426,16 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
       </div>
       <div class="cap capbelow" id="capSku"></div>
       <div class="note" id="skuNote"></div>
+    </div>
+  </section>
+
+  <section id="t-карта" hidden>
+    <div class="card">
+      <h2>Карта сетей</h2>
+      <div class="cap" id="capMap"></div>
+      <div class="chips" id="mapChips"></div>
+      <div id="chMap"></div>
+      <div class="note" id="mapNote"></div>
     </div>
   </section>
 
@@ -505,7 +519,7 @@ const mlab=m=>{const [y,n]=m.split('-');return MON[+n-1]+' '+y.slice(2);};
 const mfull=m=>{const [y,n]=m.split('-');return MON[+n-1]+' '+y;};
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const cls=x=>x>=0?'up':'down';
-const TABS=['Сети','Паспорт','Свод','SKU','Регионы','Внимание','Данные'];
+const TABS=['Сети','Паспорт','Свод','SKU','Карта','Регионы','Внимание','Данные'];
 
 const S={month:M.length-1, win:12, bu:'', net:'', cat:'', seg:'', lfl:false,
          netSort:'ktg', tab:'Сети', cmp:'lm_pm'};
@@ -1331,6 +1345,178 @@ function perfTable(A){
 
 
 /* ---------- динамика категории и точек ---------- */
+function chVsd(A){
+  const box=document.getElementById('chVsd'); if(!box) return; box.innerHTML='';
+  const ph=isPhone();
+  const start=Math.max(0, M.indexOf('2025-01'));
+  const mis=[]; for(let k=start;k<=S.month;k++) mis.push(k);
+  const W=ph?620:980, H=ph?280:340, L=ph?12:14, R=ph?46:64, T=26, B=30;
+  const s=svg(W,H);
+  // объём по производителям и всего — в текущем срезе
+  const q={}, tot={};
+  D.facts_main.forEach(r=>{
+    if(!pass(r,A.lfl)) return;
+    const m=r[0], f=r[3];
+    (q[f]||(q[f]={}))[m]=((q[f]||{})[m]||0)+r[6];
+    tot[m]=(tot[m]||0)+r[6];
+  });
+  const order=Object.keys(q).map(f=>({f:+f,
+      last:(q[f][mis[mis.length-1]]||0)}))
+    .sort((a,b)=>b.last-a.last).map(o=>o.f);
+  const shOf=(f,mi)=>tot[mi]? (q[f][mi]||0)/tot[mi] : null;
+  const ktgSh=mis.map(mi=>shOf(KI,mi)||0);
+  // левая ось — доли всех производителей, правая — только KT&G (иначе теряется)
+  let max=0; order.forEach(f=>{ if(f===KI) return;
+    mis.forEach(mi=>{const v=shOf(f,mi); if(v!==null&&v>max) max=v;}); });
+  max=Math.max(0.05,max)*1.1;
+  const kmax=Math.max(0.002,...ktgSh)*1.35;
+  const bw=(W-L-R)/mis.length;
+  const px=i=>L+i*bw+bw/2;
+  const y=v=>T+(H-T-B)*(1-v/max), yk=v=>T+(H-T-B)*(1-v/kmax);
+  const step=Math.ceil(mis.length/(ph?6:13));
+  // задний план — площадь доли KT&G по правой оси
+  const area=mis.map((mi,i)=>`${px(i)} ${yk(ktgSh[i])}`).join(' L ');
+  s.appendChild(el('path',{d:`M${px(0)} ${yk(0)} L ${area} L ${px(mis.length-1)} ${yk(0)} Z`,
+    fill:cssv('--ktg'),opacity:.16}));
+  s.appendChild(el('path',{d:'M'+mis.map((mi,i)=>`${px(i)} ${yk(ktgSh[i])}`).join(' L '),
+    fill:'none',stroke:cssv('--ktg'),'stroke-width':2.4}));
+  mis.forEach((mi,i)=>{
+    if(i%step!==0 && i!==mis.length-1) return;
+    const lb=txt(px(i), yk(ktgSh[i])-9, pct(ktgSh[i],2));
+    lb.setAttribute('fill',cssv('--ktg')); lb.setAttribute('font-size','9.5');
+    lb.setAttribute('font-weight','700'); lb.setAttribute('pointer-events','none');
+    lb.setAttribute('stroke',cssv('--surface')); lb.setAttribute('stroke-width','3');
+    lb.setAttribute('paint-order','stroke fill');
+    s.appendChild(lb);
+  });
+  // линии производителей по левой оси
+  const PAL=['--s1','--s2','--s3','--s4','--s5','--s6'];
+  const colOf=(f,i)=>f===KI?cssv('--ktg'):cssv(PAL[i%PAL.length]);
+  const ends=[];
+  order.forEach((f,i)=>{
+    if(f===KI) return;                                 // KT&G показан площадью
+    const pts=mis.map((mi,k)=>[px(k), y(shOf(f,mi)||0)]);
+    s.appendChild(el('path',{d:'M'+pts.map(p=>p.join(' ')).join(' L '),fill:'none',
+      stroke:colOf(f,i),'stroke-width':2,'stroke-linejoin':'round',opacity:.9}));
+    const lastV=shOf(f,mis[mis.length-1])||0;
+    ends.push({f,i,v:lastV,y:y(lastV)});
+    pts.forEach((p,k)=>{
+      const c=el('circle',{cx:p[0],cy:p[1],r:2.6,fill:colOf(f,i),opacity:.9});
+      hover(c,`<b>${esc(MF[f])} · ${mfull(M[mis[k]])}</b><br><span class="r">доля ${pct(shOf(f,mis[k])||0,2)}</span>`);
+      s.appendChild(c);
+    });
+  });
+  // подписи у правого края — имя и доля последнего месяца, разведённые по вертикали
+  ends.sort((a,b)=>a.y-b.y);
+  let prev=-99;
+  ends.forEach(e=>{
+    let yy=Math.max(e.y, prev+12); prev=yy;
+    const lb=txt(W-R+6, yy+4, `${MF[e.f].replace(/^\d+\s/,'')} ${pct(e.v,1)}`,'tick','start');
+    lb.setAttribute('fill',colOf(e.f,e.i)); lb.setAttribute('font-size','10');
+    lb.setAttribute('font-weight','600');
+    s.appendChild(lb);
+  });
+  mis.forEach((mi,i)=>{ if(i%step===0||i===mis.length-1)
+    s.appendChild(txt(px(i),H-10,mlab(M[mi]),'tick')); });
+  s.appendChild(el('line',{x1:L,x2:W-R,y1:y(0),y2:y(0),class:'axisline'}));
+  box.appendChild(s);
+  document.getElementById('lgVsd').innerHTML=
+    `<span><i style="background:${cssv('--ktg')};opacity:.45"></i>доля KT&G — заливка, правая ось</span>`+
+    order.filter(f=>f!==KI).map((f,i)=>
+      `<span><i style="background:${colOf(f,i)};border-radius:99px"></i>${esc(MF[f].replace(/^\d+\s/,''))}</span>`).join('');
+  document.getElementById('capVsd').textContent=
+    `линии — доля каждого производителя в объёме категории (левая ось), заливка — доля KT&G `+
+    `в собственном масштабе (правая ось): на общей шкале она визуально теряется`;
+}
+
+function bubbleMap(A){
+  const box=document.getElementById('chMap'); if(!box) return; box.innerHTML='';
+  // у каждой сети берём ЕЁ последний месяц с данными (Пятёрочка и Перекрёсток
+  // заканчиваются февралём — иначе они просто пропали бы с карты)
+  const byOff={};
+  (D.facts_perf||[]).forEach(r=>{
+    const [m,o,c,qc,qk]=r;
+    if(c!==CATI || m>S.month || !(qc>0)) return;
+    if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
+    const a=byOff[o]||(byOff[o]={});
+    const b=a[m]||(a[m]={qc:0,qk:0}); b.qc+=qc; b.qk+=qk;
+  });
+  let rows=Object.keys(byOff).map(o=>{
+    const ms=Object.keys(byOff[o]).map(Number).sort((a,b)=>b-a);
+    const mi=ms[0], v=byOff[o][mi];
+    return {oi:+o, name:OFF[o].replace(/^F_/,''), mi,
+      lag: mi!==S.month ? mfullname(M[mi]) : null,
+      cat:v.qc/MC, ktg:v.qk/MC, sh:v.qc? v.qk/v.qc : 0, bu:BUS[buOfOff[o]]||'—'};
+  });
+  if(S.mapZero!==true) rows=rows.filter(r=>r.ktg>0);   // сети без продаж KT&G прячем по умолчанию
+  rows.sort((a,b)=>b.cat-a.cat);
+
+  const W=Math.max(600,Math.round(box.getBoundingClientRect().width)||980), H=560;
+  const L=64, R=28, T=24, B=52;
+  const s=svg(W,H);
+  const xmax=Math.max(1,...rows.map(r=>r.ktg))*1.12;
+  const ymax=Math.max(0.01,...rows.map(r=>r.sh))*1.15;
+  const rmax=Math.max(1,...rows.map(r=>r.cat));
+  const x=v=>L+(W-L-R)*v/xmax, y=v=>H-B-(H-T-B)*v/ymax;
+  const rad=v=>6+34*Math.sqrt(v/rmax);          // площадь пузыря ∝ объёму категории
+  // сетка
+  for(let i=0;i<=4;i++){
+    const yy=T+(H-T-B)*i/4, vv=ymax*(1-i/4);
+    s.appendChild(el('line',{x1:L,x2:W-R,y1:yy,y2:yy,class:'axisline',opacity:.35}));
+    s.appendChild(txt(L-8,yy+4,pct(vv,1),'tick','end'));
+  }
+  for(let i=0;i<=4;i++){
+    const xx=L+(W-L-R)*i/4;
+    s.appendChild(txt(xx,H-B+18,fmtShort(xmax*i/4),'tick'));
+  }
+  s.appendChild(txt(L,H-8,'KT&G Sell Out, MC →','tick','start'));
+  const yl=txt(0,0,'Volume Share KT&G, % ↑','tick','start');
+  yl.setAttribute('transform',`translate(14,${H-B}) rotate(-90)`); s.appendChild(yl);
+  const COLBU={'FKA 1':'--grp1b','FKA 2':'--grp2b','FKA 3':'--grp3b'};
+  const placed=[];                                 // разводим подписи, чтобы не слипались
+  rows.forEach(r=>{
+    const cx=x(r.ktg), cy=y(r.sh), rr=rad(r.cat);
+    const c=el('circle',{cx,cy,r:rr,fill:cssv(COLBU[r.bu]||'--s1'),opacity:.42,
+      stroke:cssv(COLBU[r.bu]||'--s1'),'stroke-width':1.4});
+    hover(c,`<b>${esc(r.name)}</b> · ${esc(r.bu)}`+(r.lag?` · данные за ${esc(r.lag)}`:'')+
+      `<br><span class="r">категория ${fmt(Math.round(r.cat))} MC<br>`+
+      `KT&G ${fmt(Math.round(r.ktg))} MC<br>Volume Share ${pct(r.sh,2)}</span>`);
+    s.appendChild(c);
+    let ly=cy-rr-5;
+    const near=()=>placed.some(p=>Math.abs(p.x-cx)<70 && Math.abs(p.y-ly)<12);
+    let guard=0;
+    while(near() && guard++<6) ly-=12;
+    if(near()) return;                             // совсем тесно — оставляем только пузырь
+    placed.push({x:cx,y:ly});
+    const lb=txt(cx,ly,r.name+(r.lag?` (${r.lag.slice(0,3)})`:''),'val');
+    lb.setAttribute('font-size','10.5'); lb.setAttribute('font-weight','600');
+    lb.setAttribute('stroke',cssv('--surface')); lb.setAttribute('stroke-width','3');
+    lb.setAttribute('paint-order','stroke fill'); lb.setAttribute('pointer-events','none');
+    s.appendChild(lb);
+  });
+  box.appendChild(s);
+
+  const cm=document.getElementById('mapChips');
+  if(cm){
+    cm.innerHTML=[['','Все группы'],[0,'FKA 1'],[1,'FKA 2'],[2,'FKA 3']]
+      .map(([k,l])=>`<button class="chip${String(S.bu)===String(k)?' on':''}" data-bu="${k}">${l}</button>`).join('')+
+      `<button class="chip${S.mapZero?' on':''}" data-zero="1">Показывать сети без KT&G</button>`;
+    cm.querySelectorAll('[data-bu]').forEach(b=>b.onclick=()=>{S.bu=b.dataset.bu; syncNetSelect(); render();});
+    cm.querySelectorAll('[data-zero]').forEach(b=>b.onclick=()=>{S.mapZero=!S.mapZero; render();});
+  }
+  document.getElementById('capMap').textContent=
+    `${mfull(M[S.month])} · размер пузыря — объём категории в сети, ось X — продажи KT&G в MC, `+
+    `ось Y — Volume Share · если за месяц выгрузки нет, взят последний месяц сети (в скобках)`;
+  document.getElementById('mapNote').innerHTML=
+    `Каждая точка — сеть канала за последний месяц с данными. Цвет — группа канала. `+
+    `Правый нижний угол — сети, где мы много продаём при низкой доле: там растёт категория, а не мы. `+
+    `Левый верхний — высокая доля на маленьком объёме. `+
+    `Сети, у которых выгрузка заканчивается раньше (Пятёрочка и Перекрёсток — февралём), показаны `+
+    `по своему последнему месяцу, он указан в скобках у названия. `+
+    (S.mapZero?``:`Сети с нулевыми продажами KT&G скрыты — включи чип, чтобы увидеть их на нулевой оси. `)+
+    `Объёмы в коробках, 1 MC = 500 пачек.`;
+}
+
 function okrTable(){
   const em=effMonth();
   const OKR=D.okrug||{};
@@ -1527,12 +1713,14 @@ function chManuf(A){
   // высота блока подгоняется под три яруса KPI слева
   const kpiEl=document.getElementById('kpis');
   const kpiH=kpiEl?kpiEl.getBoundingClientRect().height:0;
-  const W=ph?600:360;
+  const bw0=Math.round(box.getBoundingClientRect().width)||360;
+  const W=ph?600:Math.max(300,bw0);
   const rh=(!ph && kpiH>240) ? Math.max(26, Math.floor((kpiH-64)/rows.length)) : (ph?30:26);
   const H=rows.length*rh+18;
   // слева направо: бар │ доля · название │ изменение к прошлому месяцу
-  const BARL=ph?6:4, BARR=ph?250:142, SEP1=ph?258:148,
-        SHX=ph?320:196, NAMEX=ph?330:204, SEP2=ph?452:268;
+  const K=W/360;                                  // пропорции блока считаны при ширине 360
+  const BARL=ph?6:4, BARR=ph?250:Math.round(142*K), SEP1=ph?258:Math.round(148*K),
+        SHX=ph?320:Math.round(196*K), NAMEX=ph?330:Math.round(204*K), SEP2=ph?452:Math.round(268*K);
   const s=svg(W,H); const max=Math.max(...rows.map(r=>r.sh),0.01);
   rows.forEach((r,i)=>{
     const y=i*rh+14, w=(BARR-BARL)*r.sh/max, isK=r.n===KTG;
@@ -1820,10 +2008,11 @@ function render(){
   syncNetSelect();
   chips(A);
   const tab=S.tab;
-  if(tab==='Паспорт'){ passport(A); kpis(A); okrTable(); trend(A); trendCat(A); chSio(A); chManuf(A); }
+  if(tab==='Паспорт'){ passport(A); kpis(A); okrTable(); trend(A); trendCat(A); chVsd(A); chSio(A); chManuf(A); }
   else if(tab==='Свод'){ kooTable(); }
   else if(tab==='Сети'){ tblNet(A); }
   else if(tab==='SKU'){ tblSku(A); }
+  else if(tab==='Карта'){ bubbleMap(A); }
   else if(tab==='Регионы'){ tblReg(A); }
   else if(tab==='Внимание'){ alerts(A); }
   else if(tab==='Данные'){ cover(A); }   // обе — без фильтров, см. cover()
