@@ -133,9 +133,11 @@ table.perf td.num{text-align:right;font-variant-numeric:tabular-nums}
 table.perf tr.key td.num{font-weight:620;color:var(--ink)}
 .svod{display:flex;gap:14px;align-items:flex-start}
 .pasbody{flex:1 1 auto;min-width:0}
-.tierrow{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;align-items:start;margin-bottom:12px}
+.tierrow{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;align-items:stretch;margin-bottom:12px}
 .kpis.kpi3{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:0}
-.vsblock{margin-bottom:0}
+.vsblock{margin-bottom:0;display:flex;flex-direction:column}
+.vsblock #chManuf{flex:1 1 auto;display:flex;align-items:stretch}
+.vsblock #chManuf svg{height:100%}
 @media(max-width:1200px){.tierrow{grid-template-columns:1fr}}
 .pasrow .netlist{max-height:78vh}
 .pashdr{font-size:19px;font-weight:660;letter-spacing:-.01em;margin:2px 0 10px}
@@ -1207,7 +1209,12 @@ function chManuf(A){
   })).sort((a,b)=>b.q-a.q);
 
   const ph=isPhone();
-  const W=ph?560:470, rh=ph?30:26, H=rows.length*rh+18;
+  // высота блока подгоняется под три яруса KPI слева
+  const kpiH=(document.getElementById('kpis')||{}).getBoundingClientRect
+    ? document.getElementById('kpis').getBoundingClientRect().height : 0;
+  const W=ph?560:470;
+  const rh=(!ph && kpiH>240) ? Math.max(26, Math.floor((kpiH-64)/rows.length)) : (ph?30:26);
+  const H=rows.length*rh+18;
   const L=ph?112:96;                 // подписи слева
   const SHX=W-118, SEP=W-104, DX=W-96;   // доля | линия | дельта
   const s=svg(W,H); const max=Math.max(...rows.map(r=>r.sh),0.01);
