@@ -16,6 +16,8 @@
   --s7:#4a3aa7; --s8:#e34948; --good:#006300; --bad:#d03b3b; --seq:#2a78d6; --ktg:#008300;
   --tap:44px;
   --agg:rgba(11,11,11,.045);        /* заливка агрегирующих колонок */
+  --nodata:rgba(208,59,59,.14);     /* месяц прошёл, выгрузки нет */
+  --aggsolid:#f2f2ef;               /* непрозрачный фон липких итоговых колонок */
   --aggline:rgba(11,11,11,.20);
 }
 @media (prefers-color-scheme: dark){
@@ -25,7 +27,8 @@
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.06);
     --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300;
     --s7:#9085e9; --s8:#e66767; --good:#0ca30c; --bad:#e05555; --seq:#3987e5; --ktg:#0ca30c;
-    --agg:rgba(255,255,255,.055); --aggline:rgba(255,255,255,.22);
+    --agg:rgba(255,255,255,.055); --aggline:rgba(255,255,255,.22); --nodata:rgba(224,85,85,.22);
+    --aggsolid:#232322;
   }
 }
 :root[data-theme="dark"]{
@@ -34,7 +37,8 @@
   --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.06);
   --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300;
   --s7:#9085e9; --s8:#e66767; --good:#0ca30c; --bad:#e05555; --seq:#3987e5; --ktg:#0ca30c;
-  --agg:rgba(255,255,255,.055); --aggline:rgba(255,255,255,.22);
+  --agg:rgba(255,255,255,.055); --aggline:rgba(255,255,255,.22); --nodata:rgba(224,85,85,.22);
+    --aggsolid:#232322;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth}
@@ -44,24 +48,28 @@ body{margin:0;background:var(--page);color:var(--ink);
 
 /* ---------- шапка ---------- */
 .top{position:sticky;top:0;z-index:20;background:var(--page);
-  padding:calc(env(safe-area-inset-top) + 10px) 14px 0;border-bottom:1px solid var(--border)}
-.top .row{display:flex;align-items:center;gap:10px;justify-content:space-between}
-h1{font-size:17px;line-height:1.2;margin:0;font-weight:660;letter-spacing:-.01em}
-.sub{color:var(--muted);font-size:11.5px;margin-top:2px}
+  padding:calc(env(safe-area-inset-top) + 8px) 16px 8px;border-bottom:1px solid var(--border)}
+.top .row{max-width:1760px;margin:0 auto}
+.top .row{display:flex;align-items:center;gap:14px}
+.brand{flex:0 0 auto}
+.vline{flex:0 0 1px;align-self:stretch;background:var(--border);margin:2px 2px}
+.topbtns{flex:0 0 auto;display:flex;gap:6px;margin-left:auto}
+h1{font-size:17px;line-height:1.15;margin:0;font-weight:660;letter-spacing:-.01em;white-space:nowrap}
+.sub{color:var(--muted);font-size:11px;margin-top:1px;white-space:nowrap}
 .iconbtn{flex:0 0 auto;min-width:var(--tap);height:36px;padding:0 12px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink2);border-radius:10px;font:inherit;font-size:13px;cursor:pointer;
   display:inline-flex;align-items:center;gap:6px}
 .iconbtn:active{background:var(--wash)}
 .iconbtn b{color:var(--ink);font-weight:600}
 .dot{width:7px;height:7px;border-radius:99px;background:var(--seq);display:inline-block}
-.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-top:10px;padding-bottom:8px}
+.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:1 1 auto;min-width:0}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex:0 0 auto;height:34px;padding:0 14px;border-radius:99px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink2);font-size:13.5px;cursor:pointer;white-space:nowrap}
 .tab[aria-selected="true"]{background:var(--ink);color:var(--page);border-color:var(--ink);font-weight:560}
 
 /* ---------- контент ---------- */
-.wrap{max-width:1240px;margin:0 auto;padding:12px 14px calc(env(safe-area-inset-bottom) + 40px)}
+.wrap{max-width:1760px;margin:0 auto;padding:12px 16px calc(env(safe-area-inset-bottom) + 40px)}
 section[hidden]{display:none}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
 .card h2{font-size:14px;font-weight:640;margin:0 0 2px}
@@ -122,6 +130,40 @@ table.perf tr.grp td,table.perf tr.grp th{background:var(--wash);font-weight:620
   font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 table.perf td.num{text-align:right;font-variant-numeric:tabular-nums}
 table.perf tr.key td.num{font-weight:620;color:var(--ink)}
+.svod{display:flex;gap:14px;align-items:flex-start}
+.netlist{flex:0 0 178px;max-height:74vh;overflow-y:auto;border:1px solid var(--border);
+  border-radius:12px;padding:6px;background:var(--surface)}
+.netlist button{display:block;width:100%;text-align:left;padding:7px 10px;border:0;background:none;
+  color:var(--ink2);font:inherit;font-size:13px;border-radius:8px;cursor:pointer;line-height:1.3}
+.netlist button:hover{background:var(--wash);color:var(--ink)}
+.netlist button.on{background:var(--ink);color:var(--page);font-weight:560}
+.netlist .hd{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+  padding:9px 10px 4px}
+.netlist .sep{height:1px;background:var(--grid);margin:6px 6px}
+.tw.tall{flex:1 1 auto;max-height:78vh;overflow:auto}
+/* полосы прокрутки видны всегда: иначе непонятно, что список и таблица прокручиваются */
+.netlist,.tw.tall{scrollbar-width:thin;scrollbar-color:var(--axis) transparent}
+.netlist::-webkit-scrollbar,.tw.tall::-webkit-scrollbar{width:10px;height:10px}
+.netlist::-webkit-scrollbar-track,.tw.tall::-webkit-scrollbar-track{background:var(--wash);border-radius:8px}
+.netlist::-webkit-scrollbar-thumb,.tw.tall::-webkit-scrollbar-thumb{background:var(--axis);
+  border-radius:8px;border:2px solid var(--surface)}
+.netlist::-webkit-scrollbar-thumb:hover,.tw.tall::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+.cap.capbelow{margin:10px 0 4px;color:var(--ink2);font-size:12.5px}
+/* фиксация: шапка сверху, колонка мер слева, угол — поверх обоих */
+/* итоговые колонки приклеены справа: месяцы скроллятся между мерой и итогами */
+table.koo th.st1,table.koo td.st1{position:sticky;right:214px;z-index:2;min-width:112px}
+table.koo th.st2,table.koo td.st2{position:sticky;right:106px;z-index:2;min-width:108px}
+table.koo th.st3,table.koo td.st3{position:sticky;right:0;z-index:2;min-width:106px}
+table.koo thead th.st1,table.koo thead th.st2,table.koo thead th.st3{z-index:4}
+table.koo tr.grp td.st1,table.koo tr.grp td.st2{background:var(--aggsolid)}
+table.koo tr.grp td.st3{background:var(--wash)}
+/* колонка мер шире, строки одной высоты — названия не переносятся */
+table.koo th.rowh,table.koo td.rowh{min-width:238px;white-space:nowrap}
+table.koo tbody td,table.koo tbody th{height:33px;padding-top:0;padding-bottom:0}
+table.koo tr.grp td{height:28px}
+table.koo thead th{position:sticky;top:0;z-index:3;background:var(--surface)}
+table.koo thead th.rowh{left:0;z-index:5}
+table.koo tbody td.rowh,table.koo tfoot td.rowh{position:sticky;left:0;z-index:2;background:var(--surface)}
 table.koo thead th{background:var(--wash)}
 table.koo td.agg{background:var(--agg)}
 table.koo th.agg{background:var(--agg)}
@@ -130,9 +172,20 @@ table.koo tr.grp td{background:var(--wash);font-weight:620;color:var(--ink);
   font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 table.koo tr.ttl td,table.koo tr.ttl td.rowh{font-weight:640;background:var(--wash);color:var(--ink)}
 table.koo tr.ttl td.agg{background:var(--agg)}
+/* липкие итоговые колонки — только непрозрачный фон, иначе месяцы просвечивают */
+table.koo td.st1,table.koo td.st1.agg,table.koo th.st1,table.koo th.st1.agg,
+table.koo td.st2,table.koo td.st2.agg,table.koo th.st2,table.koo th.st2.agg{background:var(--aggsolid)}
+table.koo td.st3,table.koo th.st3,table.koo tr.grp td.st3{background:var(--surface)}
 table.koo tr.grand td.agg{background:var(--agg)}
 table.koo tr.grand td,table.koo tr.grand td.rowh{font-weight:660;border-top:1px solid var(--axis)}
 table.koo td.pos{color:var(--good)} table.koo td.neg{color:var(--bad)}
+@media(max-width:900px){
+  .svod{flex-direction:column}
+  .netlist{flex:1 1 auto;width:100%;max-height:190px;display:flex;flex-wrap:wrap;gap:4px}
+  .netlist button{width:auto}
+  .netlist .hd,.netlist .sep{display:none}
+  .tw.tall{max-height:none;width:100%}
+}
 @media(max-width:760px){
   table.perf th.rowh,table.perf td.rowh{min-width:138px;font-size:11.5px}
   table.perf th,table.perf td{padding:6px 8px;font-size:12px}
@@ -185,9 +238,11 @@ select{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);wi
 .cover th{color:var(--muted);font-weight:500;font-size:10px;text-align:center;padding:0 1px}
 .cover th.rowh{text-align:left;padding-right:8px;font-size:11.5px;color:var(--ink2);white-space:nowrap;
   position:sticky;left:0;background:var(--surface)}
-.cover i{display:block;width:24px;height:16px;border-radius:3px;background:var(--wash)}
+.cover i{display:block;width:24px;height:16px;border-radius:3px;background:var(--nodata)}
 .cover i.on{background:var(--seq);opacity:.85}
 .cover i.csv{background:var(--s3);opacity:.85}
+.cover i.fut{background:var(--grid);opacity:.55}
+.cover th.ynew{box-shadow:inset 1px 0 0 var(--axis)}
 footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
 @media(min-width:761px){
   .top{padding:16px 20px 0}
@@ -208,20 +263,20 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
 <body>
 <div class="top">
   <div class="row">
-    <div>
+    <div class="brand">
       <h1>Канал FKA</h1>
       <div class="sub" id="subtitle"></div>
     </div>
-    <div style="display:flex;gap:6px">
+    <div class="vline"></div>
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="topbtns">
       <button class="iconbtn" id="themeBtn" aria-label="Тема">◐</button>
       <button class="iconbtn" id="filtBtn"><span class="dot" id="filtDot" hidden></span>Фильтры</button>
     </div>
   </div>
-  <div class="tabs" id="tabs" role="tablist"></div>
 </div>
 
 <div class="wrap">
-  <div class="chips" id="chips"></div>
 
   <section id="t-канал">
     <div class="kpis" id="kpis"></div>
@@ -255,10 +310,11 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
 
   <section id="t-свод" hidden>
     <div class="card">
-      <h2>Свод по сетям</h2>
-      <div class="cap" id="capKoo"></div>
-      <div class="chips" id="kooChips"></div>
-      <div class="tw"><table class="perf koo" id="tblKoo"></table></div>
+      <div class="svod">
+        <aside class="netlist" id="kooNets"></aside>
+        <div class="tw tall"><table class="perf koo" id="tblKoo"></table></div>
+      </div>
+      <div class="cap capbelow" id="capKoo"></div>
       <div class="note" id="kooNote"></div>
     </div>
   </section>
@@ -887,15 +943,15 @@ function kooTable(){
       <th class="num agg">LM Cum.<br>(1M~${Math.max(1,mnum-1)}M)</th>
       <th class="num agg dv">Last M.<br>(${Math.max(1,mnum-1)}M)</th>`+
       mThis.map((_,k)=>`<th class="num${k===0?' dv':''}">${MON[k]}</th>`).join('')+
-      `<th class="num agg dv">Cum.<br>(1M~${mnum}M)</th>
-       <th class="num agg dv">LY<br>(1~${mnum}M)</th>
-       <th class="num agg dv">Progress</th></tr></thead><tbody>`;
+      `<th class="num agg dv st1">Cum.<br>(1M~${mnum}M)</th>
+       <th class="num agg dv st2">LY<br>(1~${mnum}M)</th>
+       <th class="num agg dv st3">Progress</th></tr></thead><tbody>`;
   KOO_MEASURES.forEach(row=>{
     if(row[0]==='grp'){
       h+=`<tr class="grp"><td class="rowh">${esc(row[1])}</td>`+
          `<td class="agg"></td><td class="agg dv"></td>`+
          mThis.map((_,k)=>`<td${k===0?' class="dv"':''}></td>`).join('')+
-         `<td class="agg dv"></td><td class="agg dv"></td><td class="agg dv"></td></tr>`;
+         `<td class="agg dv st1"></td><td class="agg dv st2"></td><td class="dv st3"></td></tr>`;
       return;
     }
     const [key,label,kind,fk]=row;
@@ -906,9 +962,9 @@ function kooTable(){
        `<td class="num agg">${fmtOf(fk,lm)}</td>`+
        `<td class="num agg dv">${fmtOf(fk,lastM)}</td>`+
        per.map((v,k)=>`<td class="num${k===0?' dv':''}">${fmtOf(fk,v)}</td>`).join('')+
-       `<td class="num agg dv">${fmtOf(fk,cum)}</td>`+
-       `<td class="num agg dv">${fmtOf(fk,ly)}</td>`+
-       `<td class="num agg dv">${progOf(fk,cum,ly)}</td></tr>`;
+       `<td class="num agg dv st1">${fmtOf(fk,cum)}</td>`+
+       `<td class="num agg dv st2">${fmtOf(fk,ly)}</td>`+
+       `<td class="num dv st3">${progOf(fk,cum,ly)}</td></tr>`;
   });
   document.getElementById('tblKoo').innerHTML=h+'</tbody>';
 
@@ -925,16 +981,17 @@ function kooTable(){
     `уникальные SKU — объединение за период. `+
     `Отгрузки по группе X5 не делятся между Пятёрочкой, Перекрёстком и Чижиком: выбери «X5», чтобы их увидеть.`;
 
-  // выбор среза: итоги, группы FKA, X5 и сети
-  const top=[...new Set((D.facts_perf||[]).filter(r=>r[2]===catI&&r[0]===S.month)
-      .sort((a,b)=>b[4]-a[4]).map(r=>r[1]))].slice(0,12);
+  // выбор среза: итоги, группы FKA, X5 и все сети по алфавиту
   const cur2=(S.net===''&&S.bu==='')?'all':(S.net!==''?'n'+S.net:'b'+S.bu);
-  const chip=(id,lab)=>`<button class="chip${cur2===id?' on':''}" data-s="${id}">${esc(lab)}</button>`;
-  const box=document.getElementById('kooChips');
-  box.innerHTML=chip('all','Итого по всем сетям')+
-    BUS.map((b,i)=>chip('b'+i,'Итого по '+b)).join('')+
-    (X5M.size?chip('n'+X5KEY,'X5'):'')+
-    top.filter(o=>!X5M.has(o)).map(o=>chip('n'+o,OFF[o])).join('');
+  const it=(id,lab)=>`<button class="${cur2===id?'on':''}" data-s="${id}">${esc(lab)}</button>`;
+  const order=OFF.map((n,i)=>[n,i]).sort((a,b)=>a[0].localeCompare(b[0],'ru'));
+  const box=document.getElementById('kooNets');
+  box.innerHTML='<div class="hd">Итоги</div>'+
+    it('all','Все сети')+
+    BUS.map((b,i)=>it('b'+i,b)).join('')+
+    (X5M.size?it('n'+X5KEY,'X5 (группа)'):'')+
+    '<div class="sep"></div><div class="hd">Сети</div>'+
+    order.map(([n,i])=>it('n'+i,n)).join('');
   box.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
     const v=b.dataset.s;
     if(v==='all'){ S.net=''; S.bu=''; }
@@ -1096,21 +1153,35 @@ function alerts(A){
 
 /* ---------- данные ---------- */
 function cover(A){
-  const mis=A.mis, kind={};
+  // карта полноты всегда за два года: январь прошлого года — декабрь текущего,
+  // будущие месяцы показываем серым, а не как «нет выгрузки»
+  const yNow=+M[S.month].slice(0,4);
+  const grid=[];
+  for(let y=yNow-1;y<=yNow;y++)
+    for(let k=1;k<=12;k++) grid.push(`${y}-${String(k).padStart(2,'0')}`);
+  const idx={}; M.forEach((m,i)=>idx[m]=i);
+  const lastData=M[M.length-1];
+  const kind={};
   D.coverage.forEach(r=>kind[r[0]+'|'+r[1]]=r[3]);
   const list=OFF.map((o,oi)=>oi)
     .filter(oi=>netOk(oi)&&(S.bu===''||buOfOff[oi]==+S.bu))
     .sort((a,b)=>{const s=o=>{const x=A.byOff[o];return x&&x[S.month]?x[S.month].all:0;};return s(b)-s(a);});
   let h='<table class="cover"><thead><tr><th class="rowh"></th>'+
-    mis.map(mi=>`<th>${mlab(M[mi])}</th>`).join('')+'</tr></thead><tbody>';
+    grid.map(m=>`<th${m.endsWith('-01')?' class="ynew"':''}>${mlab(m)}</th>`).join('')+'</tr></thead><tbody>';
   list.forEach(oi=>{
-    h+=`<tr><th class="rowh">${esc(OFF[oi])}</th>`+mis.map(mi=>{
+    h+=`<tr><th class="rowh">${esc(OFF[oi])}</th>`+grid.map(m=>{
+      const mi=idx[m];
+      if(mi===undefined||m>lastData) return `<td><i class="fut" title="период ещё не наступил"></i></td>`;
       const k=kind[mi+'|'+oi];
       return `<td><i class="${k===undefined?'':(k==='csv'?'on csv':'on')}"></i></td>`;}).join('')+'</tr>';
   });
   document.getElementById('chCover').innerHTML=h+'</tbody></table>';
   document.getElementById('capCover').innerHTML=
-    `пустая клетка — выгрузки за месяц нет. <span style="color:var(--seq)">■</span> xlsx · <span style="color:var(--s3)">■</span> csv`;
+    `${grid[0].slice(0,4)}–${grid[grid.length-1].slice(0,4)} · `+
+    `<span style="color:var(--seq)">■</span> есть выгрузка (xlsx) · `+
+    `<span style="color:var(--s3)">■</span> есть выгрузка (csv) · `+
+    `<span style="color:var(--axis)">■</span> период ещё не наступил · `+
+    `<span style="color:#e0958f">■</span> месяц прошёл, выгрузки нет`;
 }
 function quality(){
   const rows=(D.quality||[]).slice().sort((a,b)=>(b[1]+b[2]+b[3])-(a[1]+a[2]+a[3])).slice(0,25);
@@ -1124,8 +1195,8 @@ function quality(){
       T('Вне канала FKA',fmtShort(D.outside[0]))+T('Точки нет','')+T('SKU не распознан','')+`</tr></tfoot>`:'');
 }
 
-/* ---------- чипы фильтров ---------- */
-function chips(A){
+/* ---------- индикатор активных фильтров ---------- */
+function chips(A){   // строка чипов убрана: остаётся только точка на кнопке «Фильтры»
   const c=[];
   c.push(`<button class="chip on" data-act="sheet">${mfull(M[S.month])}</button>`);
   if(S.bu!=='') c.push(`<button class="chip on" data-clear="bu">${esc(BUS[S.bu])}<span class="x">✕</span></button>`);
@@ -1135,6 +1206,7 @@ function chips(A){
   if(S.lfl) c.push(`<button class="chip on" data-clear="lfl">сопоставимая база: ${A.lfl.size} сет.<span class="x">✕</span></button>`);
   c.push(`<button class="chip" data-act="sheet">＋ фильтр</button>`);
   const box=document.getElementById('chips');
+  if(box){
   box.innerHTML=c.join('');
   box.querySelectorAll('[data-act="sheet"]').forEach(b=>b.onclick=openSheet);
   box.querySelectorAll('[data-clear]').forEach(b=>b.onclick=()=>{
@@ -1142,6 +1214,7 @@ function chips(A){
     if(k==='lfl'){S.lfl=false;document.getElementById('fLfl').checked=false;}
     else {S[k]='';document.getElementById({bu:'fBu',net:'fNet',cat:'fCat',seg:'fSeg'}[k]).value='';}
     render();});
+  }
   const n=(S.bu!=='')+(S.net!=='')+(S.cat!=='')+(S.seg!=='')+(S.lfl?1:0);
   document.getElementById('filtDot').hidden=!n;
 }
