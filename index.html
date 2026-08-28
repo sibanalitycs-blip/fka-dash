@@ -18,6 +18,9 @@
   --agg:rgba(11,11,11,.045);        /* заливка агрегирующих колонок */
   --nodata:rgba(208,59,59,.14);     /* месяц прошёл, выгрузки нет */
   --aggsolid:#f2f2ef;               /* непрозрачный фон липких итоговых колонок */
+  --grp1:rgba(42,120,214,.09);  --grp1b:rgba(42,120,214,.45);   /* объём и доля */
+  --grp2:rgba(27,175,122,.10);  --grp2b:rgba(27,175,122,.45);   /* точки и дистрибуция */
+  --grp3:rgba(235,104,52,.09);  --grp3b:rgba(235,104,52,.45);   /* изменения */
   --aggline:rgba(11,11,11,.20);
 }
 @media (prefers-color-scheme: dark){
@@ -29,6 +32,9 @@
     --s7:#9085e9; --s8:#e66767; --good:#0ca30c; --bad:#e05555; --seq:#3987e5; --ktg:#0ca30c;
     --agg:rgba(255,255,255,.055); --aggline:rgba(255,255,255,.22); --nodata:rgba(224,85,85,.22);
     --aggsolid:#232322;
+    --grp1:rgba(57,135,229,.16); --grp1b:rgba(57,135,229,.55);
+    --grp2:rgba(25,158,112,.16); --grp2b:rgba(25,158,112,.55);
+    --grp3:rgba(217,89,38,.16);  --grp3b:rgba(217,89,38,.55);
   }
 }
 :root[data-theme="dark"]{
@@ -39,6 +45,9 @@
   --s7:#9085e9; --s8:#e66767; --good:#0ca30c; --bad:#e05555; --seq:#3987e5; --ktg:#0ca30c;
   --agg:rgba(255,255,255,.055); --aggline:rgba(255,255,255,.22); --nodata:rgba(224,85,85,.22);
     --aggsolid:#232322;
+    --grp1:rgba(57,135,229,.16); --grp1b:rgba(57,135,229,.55);
+    --grp2:rgba(25,158,112,.16); --grp2b:rgba(25,158,112,.55);
+    --grp3:rgba(217,89,38,.16);  --grp3b:rgba(217,89,38,.55);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth}
@@ -181,6 +190,10 @@ table.koo th.rowh,table.koo td.rowh{white-space:nowrap}
 #tblNet th:first-child,#tblNet td:first-child{width:190px}
 #tblNet th:nth-child(2),#tblNet td:nth-child(2){width:74px}
 #tblNet td.spark{width:96px}
+/* группы столбцов: объём и доля · точки и дистрибуция · изменения */
+#tblNet thead th.g1{background:var(--grp1);box-shadow:inset 0 -2px 0 var(--grp1b)}
+#tblNet thead th.g2{background:var(--grp2);box-shadow:inset 0 -2px 0 var(--grp2b)}
+#tblNet thead th.g3{background:var(--grp3);box-shadow:inset 0 -2px 0 var(--grp3b)}
 table.koo tbody td,table.koo tbody th{height:33px;padding-top:0;padding-bottom:0}
 table.koo th,table.koo td{padding-left:7px;padding-right:7px}
 table.koo td.mo,table.koo th.mo{padding-left:5px;padding-right:5px;font-size:12px}
@@ -739,16 +752,20 @@ function netListInto(elId){
   const box=document.getElementById(elId); if(!box) return;
   const cur=(S.net===''&&S.bu==='')?'all':(S.net!==''?'n'+S.net:'b'+S.bu);
   const it=(id,lab)=>`<button class="${cur===id?'on':''}" data-s="${id}">${esc(lab)}</button>`;
-  const ord=OFF.map((n,i)=>[n,i]).sort((a,b)=>a[0].localeCompare(b[0],'ru'));
+  // при выбранной группе список сетей сужается до её сетей
+  const ord=OFF.map((n,i)=>[n,i])
+    .filter(([n,i])=> S.bu==='' || buOfOff[i]==+S.bu)
+    .sort((a,b)=>a[0].localeCompare(b[0],'ru'));
+  const hdr = S.bu==='' ? 'Сети' : `Сети · ${esc(BUS[S.bu])} — ${ord.length}`;
   box.innerHTML='<button class="resetnet" data-s="all">Сбросить фильтр</button>'+
     '<div class="hd">Итоги</div>'+it('all','Все сети')+
     BUS.map((b,i)=>it('b'+i,b)).join('')+(X5M.size?it('n'+X5KEY,'X5 (группа)'):'')+
-    '<div class="sep"></div><div class="hd">Сети</div>'+ord.map(([n,i])=>it('n'+i,n)).join('');
+    '<div class="sep"></div><div class="hd">'+hdr+'</div>'+ord.map(([n,i])=>it('n'+i,n)).join('');
   box.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
     const v=b.dataset.s;
     if(v==='all'){ S.net=''; S.bu=''; }
     else if(v[0]==='b'){ S.bu=v.slice(1); S.net=''; }
-    else { S.net=v.slice(1); S.bu=''; }
+    else { S.net=v.slice(1); }        // группу не сбрасываем: список остаётся суженным
     document.getElementById('fNet').value=S.net;
     document.getElementById('fBu').value=S.bu;
     render();});
@@ -1008,12 +1025,12 @@ function tblNet(A){
     T('KT&G, MC — 12 мес.',spark(r.spark),'spark');
 
   const t=document.getElementById('tblNet');
-  const th=(k,l)=>`<th class="sortable" data-k="${k}">${l}${S.netSort===k?(dir<0?' ▾':' ▴'):''}</th>`;
+  const th=(k,l,g)=>`<th class="sortable${g?' '+g:''}" data-k="${k}">${l}${S.netSort===k?(dir<0?' ▾':' ▴'):''}</th>`;
   const open=S.netOpen||{};
   t.innerHTML=`<thead><tr>${th('name','Сеть')}${th('bu','Группа')}
-    ${th('all','Категория,<br>MC')}${th('ktg','KT&G,<br>MC')}${th('share','Volume<br>Share, %')}
-    ${th('posAll','ТТ всего,<br>шт')}${th('pos','ТТ с KT&G,<br>шт')}${th('numd','Num Selling<br>Distr, %')}
-    ${th('mom','KT&G к прошл.<br>мес., %')}${th('yoy','KT&G год<br>к году, %')}${th('delta','Вклад,<br>MC')}
+    ${th('all','Категория,<br>MC','g1')}${th('ktg','KT&G,<br>MC','g1')}${th('share','Volume<br>Share, %','g1')}
+    ${th('posAll','ТТ всего,<br>шт','g2')}${th('pos','ТТ с KT&G,<br>шт','g2')}${th('numd','Num Selling<br>Distr, %','g2')}
+    ${th('mom','KT&G к прошл.<br>мес., %','g3')}${th('yoy','KT&G год<br>к году, %','g3')}${th('delta','Вклад,<br>MC','g3')}
     <th>KT&G, MC<br>12 мес.</th></tr></thead><tbody>`+
     rows.map(r=>{
       const op=!!open[r.key];
