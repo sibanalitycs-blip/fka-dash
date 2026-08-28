@@ -1538,8 +1538,20 @@ function openSheet(){sheet.classList.add('on');scrim.classList.add('on');}
 function closeSheet(){sheet.classList.remove('on');scrim.classList.remove('on');}
 
 /* ---------- сборка ---------- */
+function syncNetSelect(){
+  const sel=document.getElementById('fNet'); if(!sel) return;
+  const list=OFF.map((n,i)=>[n,i]).filter(([n,i])=> S.bu==='' || buOfOff[i]==+S.bu);
+  const label = S.bu==='' ? 'все сети' : `все сети ${BUS[S.bu]} — ${list.length}`;
+  sel.innerHTML=`<option value="">${esc(label)}</option>`+
+    (X5M.size && S.bu==='' ? `<option value="${X5KEY}">X5 (Пятёрочка + Перекрёсток + Чижик)</option>`:'')+
+    list.map(([n,i])=>`<option value="${i}">${esc(n)}</option>`).join('');
+  sel.value = S.net;
+  if(sel.value!==S.net){ S.net=''; sel.value=''; }   // выбранная сеть выпала из группы
+}
+
 function render(){
   const A=build();
+  syncNetSelect();
   chips(A);
   const tab=S.tab;
   if(tab==='Паспорт'){ passport(A); kpis(A); trend(A); chManuf(A); }
