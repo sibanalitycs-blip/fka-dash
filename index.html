@@ -158,6 +158,8 @@ table.regtbl th,table.regtbl td{white-space:nowrap}
 table.regtbl td.num,table.regtbl th.num{text-align:right;font-variant-numeric:tabular-nums}
 table.regtbl tr.sub td{color:var(--muted);font-size:12px}
 table.regtbl tr.okrrow{cursor:pointer}
+table.regtbl th.sortable{cursor:pointer;user-select:none}
+table.regtbl th.sorted{color:var(--ink)}
 table.okrtbl{width:100%;min-width:0;font-size:11.5px;table-layout:fixed}
 table.okrtbl th,table.okrtbl td{padding:4px 5px;white-space:nowrap;overflow:hidden}
 table.okrtbl th:first-child,table.okrtbl td:first-child{width:34%}
@@ -317,6 +319,7 @@ select{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);wi
 .cover i.csv{background:var(--s3);opacity:.85}
 .cover i.fut{background:var(--grid);opacity:.55}
 .cover th.ynew{box-shadow:inset 1px 0 0 var(--axis)}
+.cover th.rowh.grp{padding-right:12px;color:var(--muted);font-size:11px}
 footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
 @media(min-width:761px){
   .top{padding:16px 20px 0}
@@ -451,15 +454,18 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
 
   <section id="t-регионы" hidden>
     <div class="card">
-      <h2>Страна и федеральные округа</h2>
       <div class="chips" id="regChips"></div>
-      <div class="cap" id="capReg"></div>
-      <div class="tw"><table class="perf regtbl" id="tblReg"></table></div>
-    </div>
-    <div class="card">
-      <h2>Округа и регионы</h2>
-      <div class="cap" id="capReg2"></div>
-      <div class="tw tall"><table class="perf regtbl" id="tblReg2"></table></div>
+      <div class="svod">
+        <aside class="netlist" id="regNets"></aside>
+        <div>
+          <h2>Страна и федеральные округа</h2>
+          <div class="cap" id="capReg"></div>
+          <div class="tw"><table class="perf regtbl" id="tblReg"></table></div>
+          <h2 class="mt">Округа и регионы</h2>
+          <div class="cap" id="capReg2"></div>
+          <div class="tw tall"><table class="perf regtbl" id="tblReg2"></table></div>
+        </div>
+      </div>
       <div class="note" id="regNote"></div>
     </div>
   </section>
@@ -1481,6 +1487,7 @@ function bubbleMap(A){
   const med=a=>{const b=[...a].sort((x,y)=>x-y); const n=b.length; if(!n) return 0;
     return n%2? b[(n-1)/2] : (b[n/2-1]+b[n/2])/2;};
   const thrMode=S.bcgThr||'avg';                 // 'avg' — средние по сетям, 'med' — медианы
+  const TARGET_VS=0.015;                         // целевая доля KT&G в сети — вертикаль БКГ
   const avg=a=>a.length? a.reduce((x,y)=>x+y,0)/a.length : 0;
 
   function draw(boxId, xOf, yOf, sizeOf, xLab, yLab, xPct, bcg){
@@ -1518,8 +1525,11 @@ function bubbleMap(A){
     yl.setAttribute('transform',`translate(14,${H-B}) rotate(-90)`); s.appendChild(yl);
     // осевые линии БКГ рисуются только на третьей диаграмме
     if(bcg){
-    const xs=rows.map(xOf), ys=rows.map(yOf);
-    const tx=thrMode==='med'? med(xs) : avg(xs);
+    const ys=rows.map(yOf);
+    // вертикаль зафиксирована владельцем: целевая доля KT&G 1,5 % — это уровень,
+    // который делит сети на «держим долю» и «не держим», независимо от того,
+    // какое среднее даёт текущий состав канала
+    const tx=TARGET_VS;
     const ty=thrMode==='med'? med(ys) : avg(ys);
     const TX=x(tx), TY=y(ty);
     [[TX,T,TX,H-B],[L,TY,W-R,TY]].forEach(([x1,y1,x2,y2])=>
@@ -1541,7 +1551,7 @@ function bubbleMap(A){
       q.setAttribute('paint-order','stroke fill');
       s.appendChild(q);
     });
-    const thrLab=txt(TX+5,H-B-26,`${thrMode==='med'?'медиана':'среднее'} ${xPct?pct(tx,2):fmtShort(tx)+' MC'}`,'tick','start');
+    const thrLab=txt(TX+5,H-B-26,`целевая доля ${pct(tx,2)}`,'tick','start');
     thrLab.setAttribute('font-size','9.5'); thrLab.setAttribute('opacity','.7');
     thrLab.setAttribute('stroke',cssv('--surface')); thrLab.setAttribute('stroke-width','3.5');
     thrLab.setAttribute('paint-order','stroke fill'); s.appendChild(thrLab);
@@ -1587,7 +1597,7 @@ function bubbleMap(A){
       .map(([k,l])=>`<button class="chip${String(S.bu)===String(k)?' on':''}" data-bu="${k}">${l}</button>`).join('')+
       `<button class="chip${S.mapZero?' on':''}" data-zero="1">Показывать сети без KT&G</button>`+
       `<span class="chipsep"></span>`+
-      [['avg','Пороги: средние'],['med','Пороги: медианы']].map(([k,l])=>
+      [['avg','Вес сети: среднее'],['med','Вес сети: медиана']].map(([k,l])=>
         `<button class="chip${(S.bcgThr||'avg')===k?' on':''}" data-thr="${k}">${l}</button>`).join('');
     cm.querySelectorAll('[data-bu]').forEach(b=>b.onclick=()=>{S.bu=b.dataset.bu; syncNetSelect(); render();});
     cm.querySelectorAll('[data-zero]').forEach(b=>b.onclick=()=>{S.mapZero=!S.mapZero; render();});
@@ -1606,7 +1616,9 @@ function bubbleMap(A){
     `сетей). Пунктир делит поле на квадранты: <b>звёзды</b> — крупная сеть, где мы держим долю; `+
     `<b>трудные дети</b> — крупная сеть с долей ниже порога (главный потенциал); `+
     `<b>дойные коровы</b> — высокая доля на маленькой сети; <b>собаки</b> — ни веса, ни доли. `+
-    `Пороги считаются по сетям, попавшим на диаграмму, и пересчитываются под фильтр группы. `+
+    `Вертикаль зафиксирована на целевой доле <b>1,5 %</b> — это уровень, выше которого сеть `+
+    `считается «нашей». Горизонталь — средний (или медианный) вес сети, считается по сетям на `+
+    `диаграмме и пересчитывается под фильтр группы. `+
     `<b>Осторожно со средним:</b> продажи по сетям распределены крайне неравномерно, среднее `+
     `тянут вверх 3–4 сети, поэтому в правой половине оказывается меньше сетей, чем в левой; `+
     `переключатель «медианы» делит канал ровно пополам. Средняя доля по сетям (${pct(rows.reduce((a,r)=>a+r.sh,0)/Math.max(1,rows.length),2)}) `+
@@ -1856,11 +1868,47 @@ function chManuf(A){
 }
 
 /* ---------- регионы ---------- */
+function regNetList(elId){
+  const box=document.getElementById(elId); if(!box) return;
+  const bu=S.regBu===undefined?'':S.regBu, net=S.regNet===undefined?'':S.regNet;
+  const cur=(net===''&&bu==='')?'all':(net!==''?'n'+net:'b'+bu);
+  const it=(id,lab)=>`<button class="${cur===id?'on':''}" data-s="${id}">${esc(lab)}</button>`;
+  const ord=OFF.map((n,i)=>[n,i])
+    .filter(([n,i])=> bu==='' || buOfOff[i]==+bu)
+    .sort((a,b)=>a[0].localeCompare(b[0],'ru'));
+  const hdr = bu==='' ? 'Сети' : `Сети · ${esc(BUS[bu])} — ${ord.length}`;
+  box.innerHTML='<button class="resetnet" data-s="all">Сбросить фильтр</button>'+
+    '<div class="hd">Итоги</div>'+it('all','Все сети')+
+    BUS.map((b,i)=>it('b'+i,b)).join('')+(X5M.size?it('n'+X5KEY,'X5 (группа)'):'')+
+    '<div class="sep"></div><div class="hd">'+hdr+'</div>'+ord.map(([n,i])=>it('n'+i,n)).join('');
+  box.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
+    const v=b.dataset.s;
+    if(v==='all'){ S.regNet=''; S.regBu=''; }
+    else if(v[0]==='b'){ S.regBu=v.slice(1); S.regNet=''; }
+    else { S.regNet=v.slice(1); }
+    render();});
+}
+
 function tblReg(){
   const OKR=D.okrug||{};
+  // вкладка живёт на собственных фильтрах: общий S.bu / S.net её не трогают
+  const rBu=S.regBu===undefined?'':S.regBu, rNet=S.regNet===undefined?'':S.regNet;
+  const regNetOk=oi=>{
+    if(rNet===X5KEY) return X5M.has(+oi);
+    if(rNet!=='') return +oi===+rNet;
+    if(rBu!=='') return buOfOff[oi]==+rBu;
+    return true;
+  };
   const year=+M[S.month].slice(0,4);
-  const mis=M.map((m,k)=>k).filter(k=>+M[k].slice(0,4)===year && k<=S.month);
+  const YRS=[...new Set(M.map(m=>+m.slice(0,4)))].sort();      // годы, что есть в кубе
+  const ysel=S.regYear||String(year);                           // '2025' | '2026' | 'all'
+  const mis=M.map((m,k)=>k).filter(k=>{
+    if(k>S.month) return false;
+    const y=+M[k].slice(0,4);
+    return ysel==='all'? true : y===+ysel;
+  });
   const prevMi=mis.length && mis[0]>0 ? mis[0]-1 : null;   // декабрь прошлого года — база января
+  const sortMi=(S.regSort!==undefined && mis.includes(+S.regSort))? +S.regSort : null;
   const misAll=prevMi===null? mis : [prevMi, ...mis];
   const MEAS=[
     ['cat',  'Категория, MC',        v=>v.qa/MC,            'int'],
@@ -1872,27 +1920,6 @@ function tblReg(){
     ['ppd',  'PPD (by KT&G)',        (v,mi)=>v.nk? v.qk/v.nk/daysIn(M[mi]):null,'num1'],
   ];
   const cur=MEAS.find(x=>x[0]===(S.regMeas||'cat'))||MEAS[0];
-  // разрез по регионам и округам за каждый месяц года
-  const R={}, O={};
-  (D.facts_geo||[]).forEach(r=>{
-    const [m,o,b,ri,qa,qk,na,nk,c]=r;
-    if(c!==CATI || !misAll.includes(m) || !netOk(o)) return;
-    if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
-    const reg=RG[ri], okr=OKR[reg]||'(округ не указан)';
-    const a=(R[reg]=R[reg]||{okr,m:{}}), am=a.m[m]||(a.m[m]={qa:0,qk:0,na:0,nk:0});
-    am.qa+=qa; am.qk+=qk; am.na+=na; am.nk+=nk;
-    const b2=(O[okr]=O[okr]||{m:{}}), bm=b2.m[m]||(b2.m[m]={qa:0,qk:0,na:0,nk:0});
-    bm.qa+=qa; bm.qk+=qk; bm.na+=na; bm.nk+=nk;
-  });
-  delete O['(округ не указан)'];
-  const okrs=Object.keys(O).sort((a,b)=>
-    (b.m&&0)||sumQa(O[b])-sumQa(O[a]));
-  function sumQa(x){ return mis.reduce((a,mi)=>a+((x.m[mi]||{}).qa||0),0); }
-  const country={m:{}};
-  misAll.forEach(mi=>{ const t={qa:0,qk:0,na:0,nk:0};
-    okrs.forEach(k=>{const v=O[k].m[mi]; if(v){t.qa+=v.qa;t.qk+=v.qk;t.na+=v.na;t.nk+=v.nk;}});
-    country.m[mi]=t; });
-
   const val=(box,mi)=>{ const v=box.m[mi]; if(!v||(!v.qa&&!v.na)) return null;
     const x=cur[2](v,mi); return (x===null||!isFinite(x))?null:x; };
   const fmtV=x=>{ if(x===null) return '—';
@@ -1901,8 +1928,35 @@ function tblReg(){
     if(cur[3]==='pct1') return pct(x,1);
     return x.toFixed(1).replace('.',','); };
 
+  // разрез по регионам и округам за каждый месяц года
+  const R={}, O={};
+  (D.facts_geo||[]).forEach(r=>{
+    const [m,o,b,ri,qa,qk,na,nk,c]=r;
+    if(c!==CATI || !misAll.includes(m)) return;
+    if(!regNetOk(o)) return;
+    const reg=RG[ri], okr=OKR[reg]||'(округ не указан)';
+    const a=(R[reg]=R[reg]||{okr,m:{}}), am=a.m[m]||(a.m[m]={qa:0,qk:0,na:0,nk:0});
+    am.qa+=qa; am.qk+=qk; am.na+=na; am.nk+=nk;
+    const b2=(O[okr]=O[okr]||{m:{}}), bm=b2.m[m]||(b2.m[m]={qa:0,qk:0,na:0,nk:0});
+    bm.qa+=qa; bm.qk+=qk; bm.na+=na; bm.nk+=nk;
+  });
+  delete O['(округ не указан)'];
+  const okrs=Object.keys(O).sort((a,b)=> sortKey(O[b])-sortKey(O[a]));
+  function sumQa(x){ return mis.reduce((a,mi)=>a+((x.m[mi]||{}).qa||0),0); }
+  // сортировка: по значению выбранной меры за выбранный месяц, иначе по объёму за год
+  function sortKey(x){
+    if(sortMi===null) return sumQa(x);
+    const v=val(x,sortMi); return v===null? -Infinity : v;
+  }
+  const country={m:{}};
+  misAll.forEach(mi=>{ const t={qa:0,qk:0,na:0,nk:0};
+    okrs.forEach(k=>{const v=O[k].m[mi]; if(v){t.qa+=v.qa;t.qk+=v.qk;t.na+=v.na;t.nk+=v.nk;}});
+    country.m[mi]=t; });
+
   const head=`<thead><tr><th class="rowh">Территория</th>`+
-    mis.map(mi=>`<th class="num mo">${MON[+M[mi].slice(5)-1]}<br><span class="yr">${year}</span></th>`).join('')+
+    mis.map(mi=>`<th class="num mo sortable${sortMi===mi?' sorted':''}" data-mi="${mi}">`+
+      `${MON[+M[mi].slice(5)-1]}<br><span class="yr">${M[mi].slice(0,4)}</span>`+
+      `${sortMi===mi?' ▾':''}</th>`).join('')+
     `</tr></thead><tbody>`;
 
   // два режима заливки, оба считаются ВНУТРИ строки — слабый округ не красится
@@ -1950,13 +2004,17 @@ function tblReg(){
     okrs.map(k=>{
       const op=!!open[k];
       const regs=Object.keys(R).filter(r=>R[r].okr===k)
-        .sort((a,b)=>sumQa(R[b])-sumQa(R[a]));
+        .sort((a,b)=>sortKey(R[b])-sortKey(R[a]));
       let h=`<tr class="skurow okrrow" data-okr="${esc(k)}"><td class="rowh">`+
         `<span class="tw-caret">${op?'▾':'▸'}</span> <b>${esc(k)}</b> `+
         `<span class="muted">· регионов ${regs.length}</span></td>${cellsC(O[k],false)}</tr>`;
       if(op) h+=regs.map(r=>`<tr class="sub"><td class="rowh">${esc(r)}</td>${cellsC(R[r],false)}</tr>`).join('');
       return h;
     }).join('')+`</tbody>`;
+  document.querySelectorAll('#tblReg th.sortable, #tblReg2 th.sortable').forEach(th=>th.onclick=()=>{
+    const mi=+th.dataset.mi;
+    S.regSort = (S.regSort!==undefined && +S.regSort===mi) ? undefined : mi;  // повторный клик — обратно к году
+    render();});
   document.querySelectorAll('#tblReg2 tr.okrrow').forEach(tr=>tr.onclick=()=>{
     S.regOpen=S.regOpen||{}; const k=tr.dataset.okr;
     S.regOpen[k]=!S.regOpen[k]; render();});
@@ -1966,17 +2024,22 @@ function tblReg(){
     cm.innerHTML=MEAS.map(m=>`<button class="chip${cur[0]===m[0]?' on':''}" data-me="${m[0]}">${m[1]}</button>`).join('')+
       `<span class="chipsep"></span>`+
       [['level','Заливка: уровень'],['delta','Заливка: динамика']].map(([k,l])=>
-        `<button class="chip${fill===k?' on':''}" data-fill="${k}">${l}</button>`).join('');
+        `<button class="chip${fill===k?' on':''}" data-fill="${k}">${l}</button>`).join('')+
+      `<span class="chipsep"></span>`+
+      YRS.map(y=>`<button class="chip${ysel===String(y)?' on':''}" data-yr="${y}">${y}</button>`).join('')+
+      `<button class="chip${ysel==='all'?' on':''}" data-yr="all">Оба года</button>`;
     cm.querySelectorAll('[data-me]').forEach(b=>b.onclick=()=>{S.regMeas=b.dataset.me; render();});
     cm.querySelectorAll('[data-fill]').forEach(b=>b.onclick=()=>{S.regFill=b.dataset.fill; render();});
+    cm.querySelectorAll('[data-yr]').forEach(b=>b.onclick=()=>{S.regYear=b.dataset.yr; S.regSort=undefined; render();});
   }
-  const who = S.bu!=='' ? BUS[S.bu] : 'весь канал';
+  const who = rNet!=='' ? (rNet===X5KEY?'X5 (группа)':OFF[rNet]) : (rBu!==''? BUS[rBu] : 'весь канал');
+  regNetList('regNets');
   document.getElementById('capReg').textContent =
-    `${cur[1]} · ${year} год, ${mis.length} мес. · ${who} · категория «Сигареты» · заливка внутри строки: ${fill==='level'
+    `${cur[1]} · ${ysel==='all'?'2025–'+year:ysel} · ${mis.length} мес. · ${who} · категория «Сигареты» · заливка внутри строки: ${fill==='level'
       ? 'уровень месяца — худший жёлтый, лучший зелёный'
       : 'изменение к прошлому месяцу — рост зелёный, падение жёлтое (январь к декабрю)'}`;
   document.getElementById('capReg2').textContent =
-    `${cur[1]} · клик по округу раскрывает его регионы`;
+    `${cur[1]} · клик по округу раскрывает его регионы · клик по месяцу сортирует строки по нему`;
   document.getElementById('regNote').innerHTML =
     `Меры те же, что на «Своде», кроме тех, которых нет в разрезе региона: `+
     `<b>VW Selling Distr</b>, <b>SiSS</b> и <b>среднее SKU на ТТ</b> — куб не хранит по регионам `+
@@ -2131,13 +2194,16 @@ function cover(A){
   D.coverage.forEach(r=>kind[r[0]+'|'+r[1]]=r[3]);
   // объём для сортировки строк считаем ЗДЕСЬ и без фильтров: A.byOff собран
   // отфильтрованным, и порядок сетей менялся бы вслед за чужой вкладкой
-  const li=M.length-1, vol={};
-  D.facts_main.forEach(r=>{ if(r[0]===li) vol[r[1]]=(vol[r[1]]||0)+r[6]; });
-  const list=OFF.map((o,oi)=>oi).sort((a,b)=>(vol[b]||0)-(vol[a]||0));
-  let h='<table class="cover"><thead><tr><th class="rowh"></th>'+
-    grid.map(m=>`<th${m.endsWith('-01')?' class="ynew"':''}>${mlab(m)}</th>`).join('')+'</tr></thead><tbody>';
+  // порядок строк: сначала группа канала FKA 1 → 3, внутри группы сети по алфавиту
+  const buIdx=oi=>{const b=buOfOff[oi]; return (b===undefined||b===null||b==='')?99:+b;};
+  const list=OFF.map((o,oi)=>oi).sort((a,b)=>
+    (buIdx(a)-buIdx(b)) || OFF[a].localeCompare(OFF[b],'ru'));
+  let h='<table class="cover"><thead><tr><th class="rowh grp">Группа</th><th class="rowh"></th>'+
+    grid.map(m=>`<th${m.endsWith('-01')?' class="ynew"':''}>`+
+      `${MON[+m.slice(5)-1]}<br><span class="yr">${m.slice(0,4)}</span></th>`).join('')+'</tr></thead><tbody>';
   list.forEach(oi=>{
-    h+=`<tr><th class="rowh">${esc(OFF[oi])}</th>`+grid.map(m=>{
+    const bu=buIdx(oi)===99? '—' : BUS[buIdx(oi)];
+    h+=`<tr><th class="rowh grp">${esc(bu)}</th><th class="rowh">${esc(OFF[oi])}</th>`+grid.map(m=>{
       const mi=idx[m];
       if(mi===undefined||m>lastData) return `<td><i class="fut" title="период ещё не наступил"></i></td>`;
       const k=kind[mi+'|'+oi];
