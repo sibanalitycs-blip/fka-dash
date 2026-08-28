@@ -152,6 +152,7 @@ table.perf tr.key td.num{font-weight:620;color:var(--ink)}
 .kpis.kpi3 .kpi .v{font-size:17.5px;margin-top:2px}
 .kpis.kpi3 .kpi .d{font-size:10px;line-height:1.25;margin-top:2px}
 .cmpblock,.okrblock{margin-bottom:0;display:flex;flex-direction:column}
+h2.mt{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
 table.okrtbl{width:100%;min-width:0;font-size:11.5px;table-layout:fixed}
 table.okrtbl th,table.okrtbl td{padding:4px 5px;white-space:nowrap;overflow:hidden}
 table.okrtbl th:first-child,table.okrtbl td:first-child{width:34%}
@@ -431,10 +432,13 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
 
   <section id="t-карта" hidden>
     <div class="card">
-      <h2>Карта сетей</h2>
+      <h2>Продажи KT&G и доля KT&G</h2>
       <div class="cap" id="capMap"></div>
       <div class="chips" id="mapChips"></div>
       <div id="chMap"></div>
+      <h2 class="mt">Размер категории и доля KT&G</h2>
+      <div class="cap" id="capMap2"></div>
+      <div id="chMap2"></div>
       <div class="note" id="mapNote"></div>
     </div>
   </section>
@@ -1430,7 +1434,6 @@ function chVsd(A){
 }
 
 function bubbleMap(A){
-  const box=document.getElementById('chMap'); if(!box) return; box.innerHTML='';
   // у каждой сети берём ЕЁ последний месяц с данными (Пятёрочка и Перекрёсток
   // заканчиваются февралём — иначе они просто пропали бы с карты)
   const byOff={};
@@ -1451,50 +1454,56 @@ function bubbleMap(A){
   if(S.mapZero!==true) rows=rows.filter(r=>r.ktg>0);   // сети без продаж KT&G прячем по умолчанию
   rows.sort((a,b)=>b.cat-a.cat);
 
-  const W=Math.max(600,Math.round(box.getBoundingClientRect().width)||980), H=560;
-  const L=64, R=28, T=24, B=52;
-  const s=svg(W,H);
-  const xmax=Math.max(1,...rows.map(r=>r.ktg))*1.12;
-  const ymax=Math.max(0.01,...rows.map(r=>r.sh))*1.15;
-  const rmax=Math.max(1,...rows.map(r=>r.cat));
-  const x=v=>L+(W-L-R)*v/xmax, y=v=>H-B-(H-T-B)*v/ymax;
-  const rad=v=>6+34*Math.sqrt(v/rmax);          // площадь пузыря ∝ объёму категории
-  // сетка
-  for(let i=0;i<=4;i++){
-    const yy=T+(H-T-B)*i/4, vv=ymax*(1-i/4);
-    s.appendChild(el('line',{x1:L,x2:W-R,y1:yy,y2:yy,class:'axisline',opacity:.35}));
-    s.appendChild(txt(L-8,yy+4,pct(vv,1),'tick','end'));
-  }
-  for(let i=0;i<=4;i++){
-    const xx=L+(W-L-R)*i/4;
-    s.appendChild(txt(xx,H-B+18,fmtShort(xmax*i/4),'tick'));
-  }
-  s.appendChild(txt(L,H-8,'KT&G Sell Out, MC →','tick','start'));
-  const yl=txt(0,0,'Volume Share KT&G, % ↑','tick','start');
-  yl.setAttribute('transform',`translate(14,${H-B}) rotate(-90)`); s.appendChild(yl);
+  const ph=isPhone();
   const COLBU={'FKA 1':'--grp1b','FKA 2':'--grp2b','FKA 3':'--grp3b'};
-  const placed=[];                                 // разводим подписи, чтобы не слипались
-  rows.forEach(r=>{
-    const cx=x(r.ktg), cy=y(r.sh), rr=rad(r.cat);
-    const c=el('circle',{cx,cy,r:rr,fill:cssv(COLBU[r.bu]||'--s1'),opacity:.42,
-      stroke:cssv(COLBU[r.bu]||'--s1'),'stroke-width':1.4});
-    hover(c,`<b>${esc(r.name)}</b> · ${esc(r.bu)}`+(r.lag?` · данные за ${esc(r.lag)}`:'')+
-      `<br><span class="r">категория ${fmt(Math.round(r.cat))} MC<br>`+
-      `KT&G ${fmt(Math.round(r.ktg))} MC<br>Volume Share ${pct(r.sh,2)}</span>`);
-    s.appendChild(c);
-    let ly=cy-rr-5;
-    const near=()=>placed.some(p=>Math.abs(p.x-cx)<70 && Math.abs(p.y-ly)<12);
-    let guard=0;
-    while(near() && guard++<6) ly-=12;
-    if(near()) return;                             // совсем тесно — оставляем только пузырь
-    placed.push({x:cx,y:ly});
-    const lb=txt(cx,ly,r.name+(r.lag?` (${r.lag.slice(0,3)})`:''),'val');
-    lb.setAttribute('font-size','10.5'); lb.setAttribute('font-weight','600');
-    lb.setAttribute('stroke',cssv('--surface')); lb.setAttribute('stroke-width','3');
-    lb.setAttribute('paint-order','stroke fill'); lb.setAttribute('pointer-events','none');
-    s.appendChild(lb);
-  });
-  box.appendChild(s);
+
+  // одна отрисовка на обе диаграммы: меняются только ось X и мера размера пузыря
+  function draw(boxId, xOf, sizeOf, xLab, sizeLab){
+    const box=document.getElementById(boxId); if(!box) return; box.innerHTML='';
+    const W=Math.max(600,Math.round(box.getBoundingClientRect().width)||980), H=ph?420:520;
+    const L=64, R=28, T=24, B=52;
+    const s=svg(W,H);
+    const xmax=Math.max(1,...rows.map(xOf))*1.12;
+    const ymax=Math.max(0.01,...rows.map(r=>r.sh))*1.15;
+    const rmax=Math.max(1,...rows.map(sizeOf));
+    const x=v=>L+(W-L-R)*v/xmax, y=v=>H-B-(H-T-B)*v/ymax;
+    const rad=v=>6+34*Math.sqrt(Math.max(0,v)/rmax);   // площадь пузыря ∝ мере размера
+    for(let i=0;i<=4;i++){
+      const yy=T+(H-T-B)*i/4, vv=ymax*(1-i/4);
+      s.appendChild(el('line',{x1:L,x2:W-R,y1:yy,y2:yy,class:'axisline',opacity:.35}));
+      s.appendChild(txt(L-8,yy+4,pct(vv,1),'tick','end'));
+    }
+    for(let i=0;i<=4;i++) s.appendChild(txt(L+(W-L-R)*i/4,H-B+18,fmtShort(xmax*i/4),'tick'));
+    s.appendChild(txt(L,H-8,xLab+' →','tick','start'));
+    const yl=txt(0,0,'Volume Share KT&G, % ↑','tick','start');
+    yl.setAttribute('transform',`translate(14,${H-B}) rotate(-90)`); s.appendChild(yl);
+    const placed=[];
+    rows.forEach(r=>{
+      const cx=x(xOf(r)), cy=y(r.sh), rr=rad(sizeOf(r));
+      const c=el('circle',{cx,cy,r:rr,fill:cssv(COLBU[r.bu]||'--s1'),opacity:.42,
+        stroke:cssv(COLBU[r.bu]||'--s1'),'stroke-width':1.4});
+      hover(c,`<b>${esc(r.name)}</b> · ${esc(r.bu)}`+(r.lag?` · данные за ${esc(r.lag)}`:'')+
+        `<br><span class="r">категория ${fmt(Math.round(r.cat))} MC<br>`+
+        `KT&G ${fmt(Math.round(r.ktg))} MC<br>Volume Share ${pct(r.sh,2)}</span>`);
+      s.appendChild(c);
+      let ly=cy-rr-5;
+      const near=()=>placed.some(p=>Math.abs(p.x-cx)<70 && Math.abs(p.y-ly)<12);
+      let guard=0;
+      while(near() && guard++<6) ly-=12;
+      if(near()) return;
+      placed.push({x:cx,y:ly});
+      const lb=txt(cx,ly,r.name+(r.lag?` (${r.lag.slice(0,3)})`:''),'val');
+      lb.setAttribute('font-size','10.5'); lb.setAttribute('font-weight','600');
+      lb.setAttribute('stroke',cssv('--surface')); lb.setAttribute('stroke-width','3');
+      lb.setAttribute('paint-order','stroke fill'); lb.setAttribute('pointer-events','none');
+      s.appendChild(lb);
+    });
+    box.appendChild(s);
+    return {xLab,sizeLab};
+  }
+
+  draw('chMap',  r=>r.ktg, r=>r.cat, 'KT&G Sell Out, MC', 'объём категории');
+  draw('chMap2', r=>r.cat, r=>r.ktg, 'Категория, MC',     'продажи KT&G');
 
   const cm=document.getElementById('mapChips');
   if(cm){
@@ -1504,13 +1513,16 @@ function bubbleMap(A){
     cm.querySelectorAll('[data-bu]').forEach(b=>b.onclick=()=>{S.bu=b.dataset.bu; syncNetSelect(); render();});
     cm.querySelectorAll('[data-zero]').forEach(b=>b.onclick=()=>{S.mapZero=!S.mapZero; render();});
   }
-  document.getElementById('capMap').textContent=
-    `${mfull(M[S.month])} · размер пузыря — объём категории в сети, ось X — продажи KT&G в MC, `+
-    `ось Y — Volume Share · если за месяц выгрузки нет, взят последний месяц сети (в скобках)`;
+  const base=`${mfull(M[S.month])} · ${rows.length} сетей · если за месяц выгрузки нет, взят последний месяц сети (в скобках)`;
+  document.getElementById('capMap').textContent =
+    `ось X — продажи KT&G в MC, ось Y — Volume Share, размер пузыря — объём категории сети · ${base}`;
+  document.getElementById('capMap2').textContent =
+    `ось X — объём категории в MC, ось Y — Volume Share, размер пузыря — продажи KT&G · ${base}`;
   document.getElementById('mapNote').innerHTML=
-    `Каждая точка — сеть канала за последний месяц с данными. Цвет — группа канала. `+
-    `Правый нижний угол — сети, где мы много продаём при низкой доле: там растёт категория, а не мы. `+
-    `Левый верхний — высокая доля на маленьком объёме. `+
+    `Каждая точка — сеть канала, цвет — группа. `+
+    `Первая диаграмма отвечает на вопрос «сколько мы там продаём и какую долю держим», `+
+    `вторая — «какой в сети рынок и какую долю мы от него берём»: правый нижний угол второй `+
+    `диаграммы — самый большой невзятый потенциал канала. `+
     `Сети, у которых выгрузка заканчивается раньше (Пятёрочка и Перекрёсток — февралём), показаны `+
     `по своему последнему месяцу, он указан в скобках у названия. `+
     (S.mapZero?``:`Сети с нулевыми продажами KT&G скрыты — включи чип, чтобы увидеть их на нулевой оси. `)+
