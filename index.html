@@ -1437,14 +1437,22 @@ function chVsd(A){
 function bubbleMap(A){
   // у каждой сети берём ЕЁ последний месяц с данными (Пятёрочка и Перекрёсток
   // заканчиваются февралём — иначе они просто пропали бы с карты)
-  const byOff={};
+  const byOff={}, byAll={};
   (D.facts_perf||[]).forEach(r=>{
     const [m,o,c,qc,qk]=r;
     if(c!==CATI || m>S.month || !(qc>0)) return;
+    const t=byAll[o]||(byAll[o]={});             // канал целиком — для доли сети в канале
+    const u=t[m]||(t[m]={qc:0,qk:0}); u.qc+=qc; u.qk+=qk;
     if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
     const a=byOff[o]||(byOff[o]={});
     const b=a[m]||(a[m]={qc:0,qk:0}); b.qc+=qc; b.qk+=qk;
   });
+  // знаменатель доли сети — объём категории всего канала за последние месяцы сетей,
+  // он не зависит от фильтра группы: иначе «доля в канале» превращалась бы в долю в группе
+  const catChannel=Object.keys(byAll).reduce((a,o)=>{
+    const ms=Object.keys(byAll[o]).map(Number).sort((x,y)=>y-x);
+    return a + byAll[o][ms[0]].qc/MC;
+  },0)||1;
   let rows=Object.keys(byOff).map(o=>{
     const ms=Object.keys(byOff[o]).map(Number).sort((a,b)=>b-a);
     const mi=ms[0], v=byOff[o][mi];
@@ -1453,9 +1461,7 @@ function bubbleMap(A){
       cat:v.qc/MC, ktg:v.qk/MC, sh:v.qc? v.qk/v.qc : 0, bu:BUS[buOfOff[o]]||'—'};
   });
   if(S.mapZero!==true) rows=rows.filter(r=>r.ktg>0);   // сети без продаж KT&G прячем по умолчанию
-  // доля сети в канале — её объём категории к объёму категории всех показанных сетей
-  const catAll=rows.reduce((a,r)=>a+r.cat,0)||1;
-  rows.forEach(r=>{ r.wt=r.cat/catAll; });
+  rows.forEach(r=>{ r.wt=r.cat/catChannel; });
   rows.sort((a,b)=>b.cat-a.cat);
 
   const ph=isPhone();
@@ -1472,7 +1478,11 @@ function bubbleMap(A){
     const W=Math.max(600,Math.round(box.getBoundingClientRect().width)||980), H=ph?420:520;
     const L=64, R=28, T=24, B=52;
     const s=svg(W,H);
-    const xmax=Math.max(1,...rows.map(xOf))*1.12;
+    // на процентной шкале доли ось фиксирована: до 10 % с шагом 1 %, шире — только если
+    // какая-то сеть выходит за 10 % (тогда округляем вверх до целого процента)
+    const xtop=Math.max(0, ...rows.map(xOf));
+    const xmax=xPct? Math.max(0.10, Math.ceil(xtop/0.01)*0.01)
+                   : Math.max(1, ...rows.map(xOf))*1.12;
     const ymax=Math.max(0.0001,...rows.map(yOf))*1.15;
     const rmax=Math.max(1,...rows.map(sizeOf));
     const x=v=>L+(W-L-R)*v/xmax, y=v=>H-B-(H-T-B)*v/ymax;
@@ -1482,8 +1492,17 @@ function bubbleMap(A){
       s.appendChild(el('line',{x1:L,x2:W-R,y1:yy,y2:yy,class:'axisline',opacity:.35}));
       s.appendChild(txt(L-8,yy+4,pct(vv,1),'tick','end'));
     }
-    const xf=v=>xPct? pct(v,1) : fmtShort(v);
-    for(let i=0;i<=4;i++) s.appendChild(txt(L+(W-L-R)*i/4,H-B+18,xf(xmax*i/4),'tick'));
+    const xf=v=>xPct? pct(v,v<0.1?0:1) : fmtShort(v);
+    if(xPct){
+      const n=Math.round(xmax/0.01), st=Math.ceil(n/14);   // шаг 1 %, при широкой оси прореживаем
+      for(let i=0;i<=n;i+=st){
+        const vx=i*0.01, px=L+(W-L-R)*vx/xmax;
+        s.appendChild(el('line',{x1:px,x2:px,y1:T,y2:H-B,class:'axisline',opacity:.18}));
+        s.appendChild(txt(px,H-B+18,pct(vx,0),'tick'));
+      }
+    } else {
+      for(let i=0;i<=4;i++) s.appendChild(txt(L+(W-L-R)*i/4,H-B+18,xf(xmax*i/4),'tick'));
+    }
     s.appendChild(txt(L,H-8,xLab+' →','tick','start'));
     const yl=txt(0,0,yLab+' ↑','tick','start');
     yl.setAttribute('transform',`translate(14,${H-B}) rotate(-90)`); s.appendChild(yl);
@@ -1512,7 +1531,7 @@ function bubbleMap(A){
       q.setAttribute('paint-order','stroke fill');
       s.appendChild(q);
     });
-    const thrLab=txt(TX+5,H-B-26,`${thrMode==='med'?'медиана':'среднее'} ${xf(tx)}${xPct?'':' MC'}`,'tick','start');
+    const thrLab=txt(TX+5,H-B-26,`${thrMode==='med'?'медиана':'среднее'} ${xPct?pct(tx,2):fmtShort(tx)+' MC'}`,'tick','start');
     thrLab.setAttribute('font-size','9.5'); thrLab.setAttribute('opacity','.7');
     thrLab.setAttribute('stroke',cssv('--surface')); thrLab.setAttribute('stroke-width','3.5');
     thrLab.setAttribute('paint-order','stroke fill'); s.appendChild(thrLab);
