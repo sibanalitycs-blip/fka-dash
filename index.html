@@ -2217,15 +2217,15 @@ function chSio(A){
       }
     });
   };
-  draw(inV, cssv('--s3'), 'Sell In', -10);
-  draw(outV, cssv('--s2'), 'Sell Out', 16);
+  draw(inV, cssv('--s2'), 'Sell In', -10);      // отгрузки — оранжевая
+  draw(outV, cssv('--s3'), 'Sell Out', 16);     // продажи — зелёная
   box.appendChild(s);
   document.getElementById('lgSio').innerHTML=
-    `<span><i style="background:${cssv('--s3')};border-radius:99px"></i>Sell In, MC — отгрузки в сеть</span>`+
-    `<span><i style="background:${cssv('--s2')};border-radius:99px"></i>Sell Out, MC — продажи из скан-данных</span>`;
+    `<span><i style="background:${cssv('--s2')};border-radius:99px"></i>Sell In, MC — отгрузки в сеть</span>`+
+    `<span><i style="background:${cssv('--s3')};border-radius:99px"></i>Sell Out, MC — продажи из скан-данных</span>`;
   const x5only = S.net!=='' && S.net!==X5KEY && X5M.has(+S.net);
   document.getElementById('capSio').innerHTML=
-    `обе линии в коробках на одной шкале: зелёная — отгрузки из файла Sell In, оранжевая — `+
+    `обе линии в коробках на одной шкале: оранжевая — отгрузки из файла Sell In, зелёная — `+
     `продажи KT&G из скан-данных по всем категориям (отгрузки по категориям не делятся). `+
     `Разрыв между линиями — товар, осевший в сети или, наоборот, распроданный запас.`+
     (gapsOut? ` <b>Месяцев без скан-данных: ${gapsOut}</b> — линия разорвана.` : '')+
