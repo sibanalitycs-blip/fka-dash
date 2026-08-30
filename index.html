@@ -153,6 +153,17 @@ table.perf tr.key td.num{font-weight:620;color:var(--ink)}
 .kpis.kpi3 .kpi .d{font-size:10px;line-height:1.25;margin-top:2px}
 .cmpblock,.okrblock{margin-bottom:0;display:flex;flex-direction:column}
 h2.mt{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+/* профиль сети против канала */
+.pfxbars{margin:10px 0 14px}
+.pfxbar{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.pfxbar .l{width:120px;flex:0 0 120px;font-size:11.5px;color:var(--ink2);text-align:right}
+.pfxbar .t{flex:1;display:flex;height:26px;border-radius:5px;overflow:hidden}
+.pfxbar .t i{display:flex;align-items:center;justify-content:center;font-style:normal}
+.pfxbar .t i b{font-size:10.5px;color:#fff;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.pfxlgd{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0 130px;font-size:10.5px;color:var(--muted)}
+.pfxlgd i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+table.pfxtbl tr.segrow{cursor:pointer}
+table.pfxtbl tr.chanrow td,table.pfxtbl tr.idxrow td{color:var(--muted);font-size:11px}
 table.pfxtbl{width:100%;min-width:0;font-size:12px}
 table.pfxtbl th,table.pfxtbl td{white-space:nowrap;padding:5px 8px}
 table.pfxtbl thead th{background:var(--wash);font-size:10.5px}
@@ -414,12 +425,6 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
           <div class="legend" id="lgVsd"></div>
         </div>
         <div class="card">
-          <h2>Ценовые сегменты, форматы и вкусы</h2>
-          <div class="cap" id="capPfx"></div>
-          <div class="tw"><table class="perf pfxtbl" id="tblPfx"></table></div>
-          <div class="note" id="pfxNote"></div>
-        </div>
-        <div class="card">
           <h2>Sell In и Sell Out</h2>
           <div class="cap" id="capSio"></div>
           <div id="chSio"></div>
@@ -458,6 +463,21 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
       </div>
       <div class="cap capbelow" id="capSku"></div>
       <div class="note" id="skuNote"></div>
+    </div>
+  </section>
+
+  <section id="t-сегменты" hidden>
+    <div class="card">
+      <div class="svod">
+        <aside class="netlist" id="segNets"></aside>
+        <div>
+          <h2>Ценовые сегменты, форматы и вкусы</h2>
+          <div class="cap" id="capPfx"></div>
+          <div id="pfxBars"></div>
+          <div class="tw"><table class="perf pfxtbl" id="tblPfx"></table></div>
+        </div>
+      </div>
+      <div class="note" id="pfxNote"></div>
     </div>
   </section>
 
@@ -564,7 +584,7 @@ const mlab=m=>{const [y,n]=m.split('-');return MON[+n-1]+' '+y.slice(2);};
 const mfull=m=>{const [y,n]=m.split('-');return MON[+n-1]+' '+y;};
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const cls=x=>x>=0?'up':'down';
-const TABS=['Сети','Паспорт','Свод','SKU','БКГ','Регионы','Внимание','Данные'];
+const TABS=['Сети','Паспорт','Свод','SKU','Сегменты','БКГ','Регионы','Внимание','Данные'];
 
 const S={month:M.length-1, win:12, bu:'', net:'', cat:'', seg:'', lfl:false,
          netSort:'ktg', tab:'Сети', cmp:'lm_pm'};
@@ -1663,66 +1683,114 @@ function tblPfx(A){
   const ATTR=D.sku_attr||[];
   const year=+M[S.month].slice(0,4);
   const mis=M.map((m,k)=>k).filter(k=>+M[k].slice(0,4)===year && k<=S.month);
-  // объём по сети и по каналу в разрезе сегмент × формат × вкус
-  const cell={}, segTot={}, fmtTot={}, chanSeg={};
+  const cell={}, segFlv={}, segTot={}, fmtTot={}, chanSeg={}, chanFmt={};
   let tot=0, chanTot=0;
   (D.facts_sku||[]).forEach(r=>{
     const [m,o,si,q,n,c]=r;
     if(c!==CATI || !mis.includes(m)) return;
     const a=ATTR[si]; if(!a) return;
     const seg=a[0]||'—', fmt=a[1]||'—', flv=a[2]||'—';
-    if(seg==='—') return;                       // без сегмента в матрицу не берём
-    chanSeg[seg]=(chanSeg[seg]||0)+q; chanTot+=q;
+    if(seg==='—'||seg==='no data') return;
+    chanSeg[seg]=(chanSeg[seg]||0)+q; chanFmt[fmt]=(chanFmt[fmt]||0)+q; chanTot+=q;
     if(!netOk(o)) return;
     if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
-    const k=seg+'|'+flv+'|'+fmt;
-    cell[k]=(cell[k]||0)+q;
-    segTot[seg+'|'+flv]=(segTot[seg+'|'+flv]||0)+q;
-    segTot[seg]=(segTot[seg]||0)+q;
-    fmtTot[fmt]=(fmtTot[fmt]||0)+q; tot+=q;
+    cell[seg+'|'+flv+'|'+fmt]=(cell[seg+'|'+flv+'|'+fmt]||0)+q;
+    segFlv[seg+'|'+flv]=(segFlv[seg+'|'+flv]||0)+q;
+    segTot[seg]=(segTot[seg]||0)+q; fmtTot[fmt]=(fmtTot[fmt]||0)+q; tot+=q;
   });
-  const SEGORD=['1 PREMIUM','2 HIGH','2 High','3 MID-HIGH','4 MID-LOW','5 VFM'];
-  const segs=Object.keys(segTot).filter(k=>k.indexOf('|')<0)
-    .sort((a,b)=>(SEGORD.indexOf(a)+99)%99-(SEGORD.indexOf(b)+99)%99 || a.localeCompare(b,'ru'));
-  const fmts=Object.keys(fmtTot).sort((a,b)=>a.localeCompare(b,'ru'));
-  const flavs=['Aroma','Regular'];
-  const pc=(v)=>tot? (v/tot*100).toFixed(1).replace('.',',')+'%' : '—';
-  let h=`<thead><tr><th class="rowh">Ценовой сегмент</th><th class="rowh">Вкус</th>`+
+  const norm=x=>x==='2 High'?'2 HIGH':x;
+  [segTot,chanSeg].forEach(o=>{Object.keys(o).forEach(k=>{const nk=norm(k);
+    if(nk!==k){o[nk]=(o[nk]||0)+o[k]; delete o[k];}});});
+  const SEGORD=['1 PREMIUM','2 HIGH','3 MID-HIGH','4 MID-LOW','5 VFM'];
+  const segs=SEGORD.filter(x=>segTot[x]||chanSeg[x]);
+  const fmts=Object.keys(fmtTot).filter(f=>f!=='—'&&f!=='NA')
+    .sort((a,b)=>fmtTot[b]-fmtTot[a]);
+  const flavs=['Regular','Aroma'];
+  const sh=v=>tot? v/tot : 0, chSh=v=>chanTot? v/chanTot : 0;
+  const p1=v=>(v*100).toFixed(1).replace('.',',');
+  const idxOf=(me,ch)=>ch? Math.round(me/ch*100) : null;
+  const idxCls=i=>i===null?'':(i>=110?'up':(i<=90?'down':''));
+  // тепловая заливка ячеек: чем больше доля, тем плотнее
+  const mx=Math.max(...Object.values(cell).map(sh),0.001);
+  const heat=v=>{ if(!v) return '';
+    const k=Math.min(1,Math.sqrt(sh(v)/mx));
+    return ` style="background:rgba(42,120,214,${(0.05+0.42*k).toFixed(2)})"`;};
+
+  // ── профиль сети против канала: две полосы, сразу видно смещение
+  const BARC=['--s5','--s4','--s3','--s1','--s2'];
+  const barRow=(lab,getter,base)=>{
+    let x=0;
+    const segsOn=segs.filter(sg=>getter(sg)>0);
+    return `<div class="pfxbar"><span class="l">${lab}</span><span class="t">`+
+      segsOn.map((sg,i)=>{
+        const w=getter(sg)/base*100;
+        return `<i style="width:${w.toFixed(2)}%;background:${cssv(BARC[SEGORD.indexOf(sg)])};opacity:.85" `+
+               `title="${esc(sg)} ${p1(getter(sg)/base)}%">`+
+               (w>7?`<b>${p1(getter(sg)/base)}%</b>`:'')+`</i>`;
+      }).join('')+`</span></div>`;
+  };
+  const who = S.net!=='' ? netLabel() : (S.bu!=='' ? BUS[S.bu] : 'весь канал');
+  const bars=`<div class="pfxbars">`+
+    barRow(esc(who), sg=>segTot[sg]||0, tot||1)+
+    barRow('канал FKA', sg=>chanSeg[sg]||0, chanTot||1)+
+    `<div class="pfxlgd">`+segs.map(sg=>
+      `<span><i style="background:${cssv(BARC[SEGORD.indexOf(sg)])};opacity:.85"></i>${esc(sg)}</span>`).join('')+
+    `</div></div>`;
+  const bx=document.getElementById('pfxBars'); if(bx) bx.innerHTML=bars;
+
+  // ── матрица: строки-сегменты (вкус раскрывается по клику)
+  const open=S.pfxOpen||{};
+  let h=`<thead><tr><th class="rowh">Ценовой сегмент</th>`+
     fmts.map(f=>`<th class="num">${esc(f)}</th>`).join('')+
-    `<th class="num agg">Итог<br>сети</th><th class="num agg">Канал</th><th class="num agg">Индекс</th>`+
+    `<th class="num agg">Сеть</th><th class="num agg">Канал</th><th class="num agg">Индекс</th>`+
     `</tr></thead><tbody>`;
   segs.forEach(sg=>{
-    flavs.forEach(fl=>{
-      const key=sg+'|'+fl; if(!segTot[key]) return;
-      h+=`<tr><td class="rowh">${esc(sg)}</td><td class="rowh sub2">${esc(fl)}</td>`+
-        fmts.map(f=>`<td class="num">${cell[sg+'|'+fl+'|'+f]?pc(cell[sg+'|'+fl+'|'+f]):'·'}</td>`).join('')+
-        `<td class="num agg">${pc(segTot[key])}</td><td class="num agg"></td><td class="num agg"></td></tr>`;
+    const op=!!open[sg];
+    const me=sh(segTot[sg]||0), ch=chSh(chanSeg[sg]||0), ix=idxOf(me,ch);
+    h+=`<tr class="segrow" data-sg="${esc(sg)}"><td class="rowh">`+
+       `<span class="tw-caret">${op?'▾':'▸'}</span> <b>${esc(sg)}</b></td>`+
+       fmts.map(f=>{const v=flavs.reduce((a,fl)=>a+(cell[sg+'|'+fl+'|'+f]||0),0);
+         return `<td class="num"${heat(v)}>${v?p1(sh(v)):''}</td>`;}).join('')+
+       `<td class="num agg"><b>${p1(me)}%</b></td><td class="num agg">${p1(ch)}%</td>`+
+       `<td class="num agg"><b class="${idxCls(ix)}">${ix===null?'—':ix}</b></td></tr>`;
+    if(op) flavs.forEach(fl=>{
+      const v0=segFlv[sg+'|'+fl]; if(!v0) return;
+      h+=`<tr class="sub"><td class="rowh">${esc(fl)}</td>`+
+         fmts.map(f=>{const v=cell[sg+'|'+fl+'|'+f]||0;
+           return `<td class="num">${v?p1(sh(v)):''}</td>`;}).join('')+
+         `<td class="num agg">${p1(sh(v0))}%</td><td class="num agg"></td><td class="num agg"></td></tr>`;
     });
-    const ch=chanTot? chanSeg[sg]/chanTot : 0;
-    const me=tot? segTot[sg]/tot : 0;
-    const idx=ch? Math.round(me/ch*100) : null;
-    h+=`<tr class="segtotal"><td class="rowh"><b>${esc(sg)} итог</b></td><td class="rowh"></td>`+
-      fmts.map(f=>{
-        const v=flavs.reduce((a,fl)=>a+(cell[sg+'|'+fl+'|'+f]||0),0);
-        return `<td class="num">${v?pc(v):'·'}</td>`;}).join('')+
-      `<td class="num agg"><b>${pc(segTot[sg])}</b></td>`+
-      `<td class="num agg">${(ch*100).toFixed(1).replace('.',',')}%</td>`+
-      `<td class="num agg"><b class="${idx===null?'':(idx>=100?'up':'down')}">${idx===null?'—':idx}</b></td></tr>`;
   });
-  h+=`<tr class="nettotal"><td class="rowh"><b>Общий итог</b></td><td class="rowh"></td>`+
-    fmts.map(f=>`<td class="num">${pc(fmtTot[f])}</td>`).join('')+
-    `<td class="num agg"><b>100,0%</b></td><td class="num agg">100,0%</td><td class="num agg">100</td></tr>`;
+  h+=`<tr class="nettotal"><td class="rowh"><b>Итог сети</b></td>`+
+    fmts.map(f=>`<td class="num"><b>${p1(sh(fmtTot[f]||0))}</b></td>`).join('')+
+    `<td class="num agg"><b>100,0%</b></td><td class="num agg">100,0%</td><td class="num agg">100</td></tr>`+
+    `<tr class="chanrow"><td class="rowh">канал FKA</td>`+
+    fmts.map(f=>`<td class="num">${p1(chSh(chanFmt[f]||0))}</td>`).join('')+
+    `<td class="num agg"></td><td class="num agg"></td><td class="num agg"></td></tr>`+
+    `<tr class="idxrow"><td class="rowh">индекс формата</td>`+
+    fmts.map(f=>{const ix=idxOf(sh(fmtTot[f]||0),chSh(chanFmt[f]||0));
+      return `<td class="num"><b class="${idxCls(ix)}">${ix===null?'—':ix}</b></td>`;}).join('')+
+    `<td class="num agg"></td><td class="num agg"></td><td class="num agg"></td></tr>`;
   tb.innerHTML=h+'</tbody>';
-  const who = S.net!=='' ? netLabel() : (S.bu!=='' ? BUS[S.bu] : 'весь канал');
-  document.getElementById('capPfx').textContent =
-    `${who} · ${year} год, ${mis.length} мес. · доли в объёме категории сети · столбцы — формат SKU`;
+  tb.querySelectorAll('tr.segrow').forEach(tr=>tr.onclick=()=>{
+    S.pfxOpen=S.pfxOpen||{}; const k=tr.dataset.sg;
+    S.pfxOpen[k]=!S.pfxOpen[k]; render();});
+
+  // ── вывод одной строкой
+  const top=segs.slice().sort((a,b)=>(idxOf(sh(segTot[b]||0),chSh(chanSeg[b]||0))||0)-(idxOf(sh(segTot[a]||0),chSh(chanSeg[a]||0))||0));
+  const hi=top[0], lo=top[top.length-1];
+  const bestCell=Object.entries(cell).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById('capPfx').innerHTML =
+    `${esc(who)} · ${year} год, ${mis.length} мес. · доли в объёме категории · `+
+    `<b>сильнее канала:</b> ${esc(hi)} (индекс ${idxOf(sh(segTot[hi]||0),chSh(chanSeg[hi]||0))}) · `+
+    `<b>слабее:</b> ${esc(lo)} (${idxOf(sh(segTot[lo]||0),chSh(chanSeg[lo]||0))})`+
+    (bestCell?` · <b>ядро сети:</b> ${esc(bestCell[0].split('|')[0])} × ${esc(bestCell[0].split('|')[2])} — ${p1(sh(bestCell[1]))}% объёма`:'');
   document.getElementById('pfxNote').innerHTML =
-    `Ценовой сегмент, формат и вкус берутся из справочника SKU (Library). Матрица считается по `+
-    `SKU, которые куб держит в разрезе (топ-200 плюс все KT&G) — это ${(tot/1e6).toFixed(1)} млн пачек, `+
-    `около 96–98 % объёма канала; позиции без ценового сегмента в матрицу не входят. `+
-    `<b>Индекс</b> — доля сегмента в сети ÷ доля того же сегмента в канале × 100: выше 100 — сеть `+
-    `премиальнее канала в этом сегменте, ниже — беднее. Это и есть ответ на вопрос, какой ассортимент `+
-    `сеть тянет.`;
+    `Полосы сверху — профиль сети против канала: если блок сегмента шире, чем у канала, сеть в нём сильнее. `+
+    `В таблице заливка ячеек по величине доли, клик по сегменту раскрывает вкусы. `+
+    `<b>Индекс</b> = доля в сети ÷ доля в канале × 100: 110 и выше — зелёный, 90 и ниже — красный. `+
+    `Атрибуты SKU из справочника Library; матрица считается по SKU, которые куб держит в разрезе `+
+    `(топ-200 плюс все KT&G) — 96–98 % объёма; позиции без ценового сегмента не входят.`;
 }
 
 function okrTable(){
@@ -2390,10 +2458,11 @@ function render(){
   syncNetSelect();
   chips(A);
   const tab=S.tab;
-  if(tab==='Паспорт'){ passport(A); kpis(A); okrTable(); trend(A); trendCat(A); chVsd(A); tblPfx(A); chSio(A); chManuf(A); }
+  if(tab==='Паспорт'){ passport(A); kpis(A); okrTable(); trend(A); trendCat(A); chVsd(A); chSio(A); chManuf(A); }
   else if(tab==='Свод'){ kooTable(); }
   else if(tab==='Сети'){ tblNet(A); }
   else if(tab==='SKU'){ tblSku(A); }
+  else if(tab==='Сегменты'){ tblPfx(A); netListInto('segNets'); }
   else if(tab==='БКГ'){ bubbleMap(A); }
   else if(tab==='Регионы'){ tblReg(); }
   else if(tab==='Внимание'){ alerts(A); }
