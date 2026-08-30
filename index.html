@@ -177,6 +177,10 @@ table.pfxtbl tr.segrow{cursor:pointer}
 .kmbox ol{margin:0;padding-left:20px}
 .kmbox li{font-size:12.5px;line-height:1.6;margin-bottom:10px;padding-left:6px}
 .kmbox li:last-child{margin-bottom:0}
+ul.mini{margin:6px 0 4px;padding-left:18px;list-style:disc}
+ul.mini li{margin:2px 0;line-height:1.45}
+ul.mini li.muted{color:var(--muted);list-style:none;margin-left:-14px}
+.tail{margin-top:4px}
 .kmbox li i{color:var(--ink2);font-style:normal;background:var(--wash);padding:1px 5px;border-radius:4px}
 .kmbox li.km-red{border-left:3px solid var(--bad);margin-left:-9px;padding-left:12px}
 .kmbox li.km-yellow{border-left:3px solid var(--s4);margin-left:-9px;padding-left:12px}
@@ -644,7 +648,7 @@ const cls=x=>x>=0?'up':'down';
 const TABS=['Сети','Паспорт','Свод','SKU','Сегменты','БКГ','Регионы','Внимание','Данные'];
 
 const S={month:M.length-1, win:12, bu:'', net:'', cat:'', seg:'', lfl:false,
-         netSort:'ktg', tab:'Сети', cmp:'lm_pm'};
+         netSort:'bu', tab:'Сети', cmp:'lm_pm'};
 // сети, которые не показываем как отдельную строку/пункт фильтра: данные остаются
 // в агрегатах канала и группы X5, но своей строкой сеть не выводится
 const HIDE_OFF=new Set(['F_Чижик']);
@@ -1312,11 +1316,16 @@ function tblNet(A){
 
   const KEY={name:r=>r.name, bu:r=>r.bu, ppi:r=>r.ppi, all:r=>r.all, ktg:r=>r.ktg, share:r=>r.share,
     posAll:r=>r.posAll, pos:r=>r.pos, numd:r=>r.numd, ppd:r=>r.ppd};
-  const key=S.netSort in KEY ? S.netSort : 'ktg';
+  const key=S.netSort in KEY ? S.netSort : 'bu';
   const dir=S.netDir===undefined?-1:S.netDir;
   const cmp=(a,b)=>{
     const va=KEY[key](a), vb=KEY[key](b);
-    if(key==='name'||key==='bu') return String(va).localeCompare(String(vb),'ru')*(dir<0?1:-1);
+    // при сортировке по группе внутри неё всегда алфавит: КАМу удобнее искать сеть глазами
+    if(key==='bu'){
+      const g=String(va).localeCompare(String(vb),'ru')*(dir<0?1:-1);
+      return g || String(a.name).localeCompare(String(b.name),'ru');
+    }
+    if(key==='name') return String(va).localeCompare(String(vb),'ru')*(dir<0?1:-1);
     const na=(va===null||va===undefined)?-Infinity:va, nb=(vb===null||vb===undefined)?-Infinity:vb;
     return (nb-na)*(dir<0?1:-1);
   };
@@ -1563,6 +1572,31 @@ function perfTable(A){
 
 
 /* ---------- динамика категории и точек ---------- */
+// ── линия с разрывами: месяцы без выгрузки не тянут график в ноль.
+// Сплошной сегмент — там, где данные подряд; пунктир — мост через пропуск
+// (интерполяция, не факт). points: [{x,y}|null] по индексам месяцев.
+function drawGapLine(svgEl, pts, color, width){
+  let seg=[];
+  const solid=[], dash=[];
+  let lastOk=null;
+  pts.forEach(p=>{
+    if(p){
+      if(!seg.length && lastOk) dash.push([lastOk,p]);   // мост через пропуск
+      seg.push(p); lastOk=p;
+    } else {
+      if(seg.length>1) solid.push(seg);
+      seg=[];
+    }
+  });
+  if(seg.length>1) solid.push(seg);
+  dash.forEach(([a,b])=>svgEl.appendChild(el('path',{
+    d:`M${a[0]} ${a[1]} L ${b[0]} ${b[1]}`, fill:'none', stroke:color,
+    'stroke-width':width, 'stroke-dasharray':'4 4', opacity:.55})));
+  solid.forEach(sg=>svgEl.appendChild(el('path',{
+    d:'M'+sg.map(p=>p.join(' ')).join(' L '), fill:'none', stroke:color,
+    'stroke-width':width, 'stroke-linejoin':'round'})));
+}
+
 function chVsd(A){
   const box=document.getElementById('chVsd'); if(!box) return; box.innerHTML='';
   const ph=isPhone();
@@ -1581,24 +1615,31 @@ function chVsd(A){
   const order=Object.keys(q).map(f=>({f:+f,
       last:(q[f][mis[mis.length-1]]||0)}))
     .sort((a,b)=>b.last-a.last).map(o=>o.f);
-  const shOf=(f,mi)=>tot[mi]? (q[f][mi]||0)/tot[mi] : null;
-  const ktgSh=mis.map(mi=>shOf(KI,mi)||0);
+  const shOf=(f,mi)=>tot[mi]? (q[f][mi]||0)/tot[mi] : null;   // нет выгрузки — null, не ноль
+  const ktgSh=mis.map(mi=>shOf(KI,mi));
+  const gaps=mis.filter(mi=>!tot[mi]).length;
   // левая ось — доли всех производителей, правая — только KT&G (иначе теряется)
   let max=0; order.forEach(f=>{ if(f===KI) return;
     mis.forEach(mi=>{const v=shOf(f,mi); if(v!==null&&v>max) max=v;}); });
   max=Math.max(0.05,max)*1.1;
-  const kmax=Math.max(0.002,...ktgSh)*1.35;
+  const kmax=Math.max(0.002,...ktgSh.filter(v=>v!==null))*1.35;
   const bw=(W-L-R)/mis.length;
   const px=i=>L+i*bw+bw/2;
   const y=v=>T+(H-T-B)*(1-v/max), yk=v=>T+(H-T-B)*(1-v/kmax);
   const step=Math.ceil(mis.length/(ph?6:13));
   // задний план — площадь доли KT&G по правой оси
-  const area=mis.map((mi,i)=>`${px(i)} ${yk(ktgSh[i])}`).join(' L ');
-  s.appendChild(el('path',{d:`M${px(0)} ${yk(0)} L ${area} L ${px(mis.length-1)} ${yk(0)} Z`,
-    fill:cssv('--ktg'),opacity:.16}));
-  s.appendChild(el('path',{d:'M'+mis.map((mi,i)=>`${px(i)} ${yk(ktgSh[i])}`).join(' L '),
-    fill:'none',stroke:cssv('--ktg'),'stroke-width':2.4}));
+  // заливка рисуется кусками между разрывами
+  let run=[];
+  const flush=()=>{ if(run.length>1){
+      const d='M'+run[0][0]+' '+yk(0)+' L '+run.map(p=>p.join(' ')).join(' L ')+
+        ' L '+run[run.length-1][0]+' '+yk(0)+' Z';
+      s.appendChild(el('path',{d,fill:cssv('--ktg'),opacity:.16}));
+    } run=[]; };
+  mis.forEach((mi,i)=>{ if(ktgSh[i]===null){ flush(); return; } run.push([px(i), yk(ktgSh[i])]); });
+  flush();
+  drawGapLine(s, mis.map((mi,i)=>ktgSh[i]===null? null : [px(i), yk(ktgSh[i])]), cssv('--ktg'), 2.4);
   mis.forEach((mi,i)=>{
+    if(ktgSh[i]===null) return;
     if(i%step!==0 && i!==mis.length-1) return;
     const lb=txt(px(i), yk(ktgSh[i])-9, pct(ktgSh[i],2));
     lb.setAttribute('fill',cssv('--ktg')); lb.setAttribute('font-size','9.5');
@@ -1608,19 +1649,21 @@ function chVsd(A){
     s.appendChild(lb);
   });
   // линии производителей по левой оси
-  const PAL=['--s1','--s2','--s3','--s4','--s5','--s6'];
+  // --s6 убран из палитры: он почти совпадает с --ktg, и линия «Other» сливалась
+  // с заливкой доли KT&G; шестым идёт нейтральный серый
+  const PAL=['--s1','--s2','--s7','--s4','--s5','--axis'];
   const colOf=(f,i)=>f===KI?cssv('--ktg'):cssv(PAL[i%PAL.length]);
   const ends=[];
   order.forEach((f,i)=>{
     if(f===KI) return;                                 // KT&G показан площадью
-    const pts=mis.map((mi,k)=>[px(k), y(shOf(f,mi)||0)]);
-    s.appendChild(el('path',{d:'M'+pts.map(p=>p.join(' ')).join(' L '),fill:'none',
-      stroke:colOf(f,i),'stroke-width':2,'stroke-linejoin':'round',opacity:.9}));
+    const pts=mis.map((mi,k)=>{const v=shOf(f,mi); return v===null? null : [px(k), y(v)];});
+    drawGapLine(s, pts, colOf(f,i), 2);
     const lastV=shOf(f,mis[mis.length-1])||0;
     ends.push({f,i,v:lastV,y:y(lastV)});
     pts.forEach((p,k)=>{
+      if(!p) return;
       const c=el('circle',{cx:p[0],cy:p[1],r:2.6,fill:colOf(f,i),opacity:.9});
-      hover(c,`<b>${esc(MF[f])} · ${mfull(M[mis[k]])}</b><br><span class="r">доля ${pct(shOf(f,mis[k])||0,2)}</span>`);
+      hover(c,`<b>${esc(MF[f])} · ${mfull(M[mis[k]])}</b><br><span class="r">доля ${pct(shOf(f,mis[k]),2)}</span>`);
       s.appendChild(c);
     });
   });
@@ -1642,9 +1685,11 @@ function chVsd(A){
     `<span><i style="background:${cssv('--ktg')};opacity:.45"></i>доля KT&G — заливка, правая ось</span>`+
     order.filter(f=>f!==KI).map((f,i)=>
       `<span><i style="background:${colOf(f,i)};border-radius:99px"></i>${esc(MF[f].replace(/^\d+\s/,''))}</span>`).join('');
-  document.getElementById('capVsd').textContent=
+  document.getElementById('capVsd').innerHTML=
     `линии — доля каждого производителя в объёме категории (левая ось), заливка — доля KT&G `+
-    `в собственном масштабе (правая ось): на общей шкале она визуально теряется`;
+    `в собственном масштабе (правая ось): на общей шкале она визуально теряется`+
+    (gaps? ` · <b>месяцев без выгрузки: ${gaps}</b> — на графике разрыв, пунктир через него `+
+           `показывает вероятный ход, а не факт` : '');
 }
 
 function bubbleMap(A){
@@ -2693,8 +2738,10 @@ function alerts(A){
     const gone=Object.entries(prevS).filter(([si,q])=>!curS.has(+si)&&q>=500)
       .sort((a,b)=>b[1]-a[1]);
     if(gone.length) add(gone.reduce((a,g)=>a+g[1],0)/MC,'red',
-      `<b>Выпало SKU: ${gone.length}.</b> ${gone.slice(0,3).map(g=>esc(SK[g[0]])+' — '+fmt(Math.round(g[1]/MC))+' MC').join(', ')}`+
-      `${gone.length>3?' и ещё '+(gone.length-3):''}. Всего ${fmt(Math.round(gone.reduce((a,g)=>a+g[1],0)/MC))} MC ушло с полки.`);
+      `<b>Выпало SKU: ${gone.length}</b><ul class="mini">`+
+      gone.slice(0,4).map(g=>`<li>${esc(SK[g[0]])} — <b>${fmt(Math.round(g[1]/MC))} MC</b></li>`).join('')+
+      (gone.length>4?`<li class="muted">и ещё ${gone.length-4}</li>`:'')+
+      `</ul><div class="tail">Всего ${fmt(Math.round(gone.reduce((a,g)=>a+g[1],0)/MC))} MC ушло с полки.</div>`);
   }
   // ── 4. регионы с провальной дистрибуцией
   if(one){
@@ -2710,9 +2757,10 @@ function alerts(A){
       .map(([k,v])=>[k,v,(avg-v.nk/v.na)*v.na*ppd(cur)*days/MC])
       .sort((a,b)=>b[2]-a[2]).slice(0,3);
     if(bad.length) add(bad.reduce((a,b)=>a+b[2],0),'yellow',
-      `<b>Регионы без дистрибуции.</b> `+
-      bad.map(([k,v,mc])=>`${esc(k)} — Num Distr ${pct(v.nk/v.na,1)} против ${pct(avg,1)} по сети (+${fmt(Math.round(mc))} MC)`).join('; ')+
-      `. Довести их до среднего по сети — ${fmt(Math.round(bad.reduce((a,b)=>a+b[2],0)))} MC/мес.`);
+      `<b>Регионы без дистрибуции:</b><ul class="mini">`+
+      bad.map(([k,v,mc])=>`<li>${esc(k)} — Num Distr ${pct(v.nk/v.na,1)} против ${pct(avg,1)} по сети `+
+        `<b>+${fmt(Math.round(mc))} MC</b></li>`).join('')+
+      `</ul><div class="tail">Довести их до среднего по сети — ${fmt(Math.round(bad.reduce((a,b)=>a+b[2],0)))} MC/мес.</div>`);
   }
   // ── 5. ассортимент: ядро сети против нашего портфеля
   if(one && D.facts_pfx && D.facts_pfx.length){
@@ -2765,9 +2813,10 @@ function alerts(A){
     const top=Object.entries(per).map(([o,v])=>[OFF[o],(v.qc*TARGET-v.qk)/MC,v.qc?v.qk/v.qc:0])
       .filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,3);
     if(top.length) add(top.reduce((a,x)=>a+x[1],0),'green',
-      `<b>Где разрыв до цели самый большой.</b> `+
-      top.map(x=>`${esc(x[0].replace('F_',''))} — доля ${pct(x[2],2)}, разрыв ${fmt(Math.round(x[1]))} MC/мес`).join('; ')+
-      `. Эти три сети дают ${fmt(Math.round(top.reduce((a,x)=>a+x[1],0)))} MC из общего разрыва.`);
+      `<b>Где разрыв до цели самый большой:</b><ul class="mini">`+
+      top.map(x=>`<li>${esc(x[0].replace('F_',''))} — доля ${pct(x[2],2)}, разрыв `+
+        `<b>${fmt(Math.round(x[1]))} MC/мес</b></li>`).join('')+
+      `</ul><div class="tail">Эти три сети дают ${fmt(Math.round(top.reduce((a,x)=>a+x[1],0)))} MC из общего разрыва.</div>`);
   }
 
   // ── 6. отгрузки
@@ -2884,11 +2933,11 @@ function alerts(A){
       return {k, free:a.na-a.nk, nd:a.na? a.nk/a.na : 0, qa:a.qa};
     }).filter(r=>r.free>=150 && r.nd<0.6).sort((a,b)=>b.free-a.free).slice(0,3);
     if(freeRows.length) km.push([freeRows.reduce((a,r)=>a+r.free,0)*ppd(cur)*days/MC,'yellow',
-      `<b>Белые пятна по регионам:</b> `+
-      freeRows.map(r=>`${esc(r.k)} — ${fmt(r.free)} магазинов без KT&G (Num Distr ${pct(r.nd,1)}, `+
-        `категория ${fmt(Math.round(r.qa/MC))} MC)`).join('; ')+
-      `. <i>Принести КМ список этих точек и просить ввод в матрицу кластера: `+
-      `${fmt(Math.round(freeRows.reduce((a,r)=>a+r.free,0)*ppd(cur)*days/MC))} MC/мес при нынешнем PPD.</i>`]);
+      `<b>Белые пятна по регионам:</b><ul class="mini">`+
+      freeRows.map(r=>`<li>${esc(r.k)} — <b>${fmt(r.free)} магазинов</b> без KT&G, Num Distr ${pct(r.nd,1)}, `+
+        `категория ${fmt(Math.round(r.qa/MC))} MC</li>`).join('')+
+      `</ul><div class="tail"><i>Принести КМ список этих точек и просить ввод в матрицу кластера: `+
+      `${fmt(Math.round(freeRows.reduce((a,r)=>a+r.free,0)*ppd(cur)*days/MC))} MC/мес при нынешнем PPD.</i></div>`]);
     regRows.filter(r=>r.dCat>0 && r.dKtg<=-0.05 && r.qk/MC>=2)
       .sort((a,b)=>a.dKtg-b.dKtg).slice(0,2).forEach(r=>{
       km.push([Math.abs(r.dKtg)*r.qk/MC,'red',
