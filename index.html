@@ -163,6 +163,12 @@ h2.mt{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
 .pfxlgd{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0 130px;font-size:10.5px;color:var(--muted)}
 .pfxlgd i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
 table.pfxtbl tr.segrow{cursor:pointer}
+.insbox{margin:14px 0 4px;padding:12px 16px;border:1px solid var(--line);border-radius:10px;
+  background:var(--wash)}
+.insbox .hd{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.insbox ol{margin:0;padding-left:20px}
+.insbox li{font-size:12.5px;line-height:1.55;margin-bottom:6px}
+.insbox li:last-child{margin-bottom:0}
 table.pfxtbl tr.chanrow td,table.pfxtbl tr.idxrow td{color:var(--muted);font-size:11px}
 table.pfxtbl{width:100%;min-width:0;font-size:12px}
 table.pfxtbl th,table.pfxtbl td{white-space:nowrap;padding:5px 8px}
@@ -476,6 +482,7 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
           <div class="cap" id="capPfx"></div>
           <div id="pfxBars"></div>
           <div class="tw"><table class="perf pfxtbl" id="tblPfx"></table></div>
+          <div id="pfxIns"></div>
         </div>
       </div>
       <div class="note" id="pfxNote"></div>
@@ -1729,7 +1736,15 @@ function tblPfx(A){
     if(nk!==k){o[nk]=(o[nk]||0)+o[k]; delete o[k];}});});
   const SEGORD=['1 PREMIUM','2 HIGH','3 MID-HIGH','4 MID-LOW','5 VFM'];
   const segs=SEGORD.filter(x=>segTot[x]||chanSeg[x]);
-  const fmts=Object.keys(fmtTot).filter(f=>f!=='—'&&f!=='NA').sort((a,b)=>fmtTot[b]-fmtTot[a]);
+  // порядок форматов задан владельцем: 100 SS · 84 SS · 84 S · 84 R, дальше остальные по объёму
+  const FMTORD=['100 SS','84 SS','84 S','84 R'];
+  const fmts=Object.keys(fmtTot).filter(f=>f!=='—'&&f!=='NA').sort((a,b)=>{
+    const ia=FMTORD.indexOf(a), ib2=FMTORD.indexOf(b);
+    if(ia>=0 && ib2>=0) return ia-ib2;
+    if(ia>=0) return -1;
+    if(ib2>=0) return 1;
+    return fmtTot[b]-fmtTot[a];
+  });
   const flavs=['Regular','Aroma'];
   const sh=v=>tot? v/tot : 0, chSh=v=>chanTot? v/chanTot : 0;
   const p1=v=>(v*100).toFixed(1).replace('.',',');
@@ -1768,6 +1783,8 @@ function tblPfx(A){
       `<span><i style="background:${cssv(BARC[SEGORD.indexOf(sg)])};opacity:.85"></i>${esc(sg)}</span>`).join('')+
     `</div></div>`;
 
+  const _bc=Object.entries(cell).sort((a,b)=>b[1]-a[1])[0];
+  const bestCellRef={k:_bc?_bc[0]:'', v:_bc?_bc[1]:0};
   const open=S.pfxOpen||{};
   let h=`<thead><tr><th class="rowh">Ценовой сегмент</th>`+
     fmts.map(f=>`<th class="num">${esc(f)}</th>`).join('')+
@@ -1804,9 +1821,88 @@ function tblPfx(A){
     S.pfxOpen=S.pfxOpen||{}; const k=tr.dataset.sg;
     S.pfxOpen[k]=!S.pfxOpen[k]; render();});
 
+  // ── выводы: считаются заново под выбранную сеть и округ
+  const MCn=500;
+  const catMC=tot/MCn;                                  // объём категории в срезе, MC
+  // профиль KT&G по сегментам и форматам — из facts_sku (все SKU KT&G в кубе есть)
+  const ATTR2=D.sku_attr||[];
+  const kSeg={}, kFmt={}; let kTot=0;
+  (D.facts_sku||[]).forEach(r=>{
+    const [m,o,si,q,n,c]=r;
+    if(c!==CATI || !mis.includes(m)) return;
+    if(MF[SKMF[si]]!==KTG) return;
+    if(!netOk(o)) return;
+    if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
+    const a=ATTR2[si]; if(!a) return;
+    const sg=norm(a[0]||'—'), fm=a[1]||'—';
+    if(sg!=='—'){ kSeg[sg]=(kSeg[sg]||0)+q; }
+    kFmt[fm]=(kFmt[fm]||0)+q; kTot+=q;
+  });
+  const kSh=v=>kTot? v/kTot : 0;
+  const out=[];
+  // 1. позиционирование
+  const byIdx=segs.map(sg=>[sg, idxOf(sh(segTot[sg]||0), chSh(chanSeg[sg]||0))||0])
+    .sort((a,b)=>b[1]-a[1]);
+  if(byIdx.length){
+    const [hs,hv]=byIdx[0], [ls,lv]=byIdx[byIdx.length-1];
+    const prem=idxOf(sh(segTot['1 PREMIUM']||0), chSh(chanSeg['1 PREMIUM']||0));
+    out.push(`<b>Позиционирование.</b> Сеть сильнее канала в <b>${esc(hs)}</b> (индекс ${hv}) `+
+      `и слабее в <b>${esc(ls)}</b> (${lv}). Премиум ${prem===null?'—':prem}: `+
+      (prem===null?'—'
+       :(prem>=110?'сеть премиальнее канала — дорогие новинки здесь имеют шанс.'
+       :(prem<90?'сеть заметно беднее канала — премиальный ввод даст объём ниже ожидаемого.'
+       :'сеть примерно на уровне канала.'))));
+  }
+  // 2. где недобираем к каналу — в п.п. и в коробках
+  const gaps=segs.map(sg=>{
+    const d=chSh(chanSeg[sg]||0)-sh(segTot[sg]||0);
+    return [sg, d, d*catMC];
+  }).sort((a,b)=>b[1]-a[1]);
+  if(gaps.length && gaps[0][1]>0.005){
+    const [g,dp,dmc]=gaps[0];
+    out.push(`<b>Недобор к каналу.</b> В <b>${esc(g)}</b> сеть держит ${p1(sh(segTot[g]||0))}% против `+
+      `${p1(chSh(chanSeg[g]||0))}% в канале — разрыв ${p1(dp)} п.п., или <b>${fmt(Math.round(dmc))} MC</b> `+
+      `объёма категории за период. Столько сеть «недопродаёт» в этом сегменте по сравнению с каналом.`);
+  }
+  // 3. ядро сети
+  if(bestCellRef.v){
+    const [sg2,,fm2]=bestCellRef.k.split('|');
+    out.push(`<b>Ядро сети.</b> ${esc(sg2)} × ${esc(fm2)} — ${p1(sh(bestCellRef.v))}% всего объёма `+
+      `(${fmt(Math.round(bestCellRef.v/MCn))} MC). Листинг и полка в первую очередь сюда: `+
+      `один процент доли здесь стоит ${fmt(Math.round(catMC/100))} MC.`);
+  }
+  // 4. попадает ли наш портфель в ядро сети
+  if(kTot>0 && byIdx.length){
+    const kTop=Object.entries(kSeg).sort((a,b)=>b[1]-a[1])[0];
+    const netTop=segs.slice().sort((a,b)=>(segTot[b]||0)-(segTot[a]||0))[0];
+    const same=kTop && kTop[0]===netTop;
+    out.push(`<b>Наш портфель.</b>${okrSel?' <span class="muted">(по сети целиком — разрез KT&G по округам куб не хранит)</span>':''} `+
+      `${p1(kSh(kTop?kTop[1]:0))}% продаж KT&G в этой сети приходится на `+
+      `<b>${esc(kTop?kTop[0]:'—')}</b>, а масса сети — в <b>${esc(netTop)}</b> (${p1(sh(segTot[netTop]||0))}% категории). `+
+      (same? 'Портфель попадает в ядро — расширять надо там же, вглубь ассортимента.'
+           : 'Портфель мимо ядра: мы продаём не в том сегменте, где у сети объём — вводить нужно позиции '+
+             esc(netTop)+', иначе доля упирается в потолок.'));
+  }
+  // 5. формат
+  const fIdx=fmts.map(f=>[f, idxOf(sh(fmtTot[f]||0), chSh(chanFmt[f]||0))||0])
+    .filter(x=>fmtTot[x[0]]/tot>0.05).sort((a,b)=>b[1]-a[1]);
+  if(fIdx.length>1){
+    const [ff,fv]=fIdx[0], [lf,lv2]=fIdx[fIdx.length-1];
+    const kf=Object.entries(kFmt).sort((a,b)=>b[1]-a[1])[0];
+    out.push(`<b>Форматы.</b> Сильнее канала <b>${esc(ff)}</b> (${fv}), слабее <b>${esc(lf)}</b> (${lv2}). `+
+      (kf? `У KT&G ${p1(kSh(kf[1]))}% продаж в формате <b>${esc(kf[0])}</b>`+
+           (kf[0]===ff? ' — совпадает с сильной стороной сети.' : ` — а сеть сильна в ${esc(ff)}; разрыв форматов стоит проверить на полке.`)
+        : ''));
+  }
+  const ib=document.getElementById('pfxIns');
+  if(ib) ib.innerHTML = out.length
+    ? `<div class="insbox"><div class="hd">Выводы и рекомендации — ${esc(who)}, ${okrSel?esc(okrSel):'вся Россия'}</div>`+
+      `<ol>`+out.map(x=>`<li>${x}</li>`).join('')+`</ol></div>`
+    : '';
+
   const top=segs.slice().sort((a,b)=>(idxOf(sh(segTot[b]||0),chSh(chanSeg[b]||0))||0)-(idxOf(sh(segTot[a]||0),chSh(chanSeg[a]||0))||0));
   const hi=top[0], lo=top[top.length-1];
-  const bestCell=Object.entries(cell).sort((a,b)=>b[1]-a[1])[0];
+  const bestCell=_bc;
   document.getElementById('capPfx').innerHTML =
     `${esc(who)} · ${okrSel?esc(okrSel):'вся Россия'} · ${year} год, ${mis.length} мес. · `+
     `<b>сильнее канала:</b> ${esc(hi||'—')} (${hi?idxOf(sh(segTot[hi]||0),chSh(chanSeg[hi]||0)):'—'}) · `+
