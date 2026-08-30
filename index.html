@@ -285,6 +285,12 @@ table.koo th.rowh,table.koo td.rowh{white-space:nowrap}
    пропорционально, и «Группа» получала 93 px вместо 56. */
 #tblNet{table-layout:auto;width:100%;min-width:0}
 #tblNet td.name,#tblNet th[data-k="name"],#tblNet th[data-k="bu"],#tblNet th[data-k="ppi"]{text-align:left}
+/* заливка группы канала — та же, что на вкладке «Данные» */
+#tblNet td.g0{background:var(--grp1)}
+#tblNet td.g1{background:var(--grp2)}
+#tblNet td.g2{background:var(--grp3)}
+#tblNet td.g9{background:var(--wash)}
+#tblNet tr.netsub td.g0,#tblNet tr.netsub td.g1,#tblNet tr.netsub td.g2{opacity:.85}
 #tblNet th[data-k="bu"]{width:56px}                 /* по ширине «FKA 1» */
 #tblNet th[data-k="name"]{width:186px}              /* самое длинное — «F_Перекресток (февраль)» */
 #tblNet th[data-k="ppi"]{width:132px}               /* бейдж «MID-HIGH +» плюс число */
@@ -943,8 +949,10 @@ function trend(A){
   });
   const tot=mis.map(mi=>bus.reduce((a,b)=>a+((cube[mi]&&cube[mi][b])||0),0));
   const max=Math.max(1,...tot);
-  const sh=mis.map((mi,i)=>allq[mi]?tot[i]/allq[mi]:0);    // доля за весь период, не только окно
-  const shMax=Math.max(0.001,...sh)*1.25;
+  // нет выгрузки за месяц — null, иначе линия доли валится в ноль и читается как обвал
+  const sh=mis.map((mi,i)=>allq[mi]? tot[i]/allq[mi] : null);
+  const gaps=mis.filter(mi=>!allq[mi]).length;
+  const shMax=Math.max(0.001,...sh.filter(v=>v!==null))*1.25;
   const bw=(W-L-R)/mis.length, pad=Math.max(2,bw*0.2);
   const y=v=>T+(H-T-B)*(1-v/max);
   // без линий сетки и без левой оси: значение подписано на каждом столбце
@@ -971,10 +979,10 @@ function trend(A){
     if(i%step===0||i===mis.length-1) s.appendChild(txt(L+i*bw+bw/2,H-10,mlab(M[mi]),'tick'));
   });
   const yl=v=>T+(H-T-B)*(1-v/shMax);
-  const pts=mis.map((mi,i)=>[L+i*bw+bw/2,yl(sh[i])]);
-  s.appendChild(el('path',{d:'M'+pts.map(p=>p.join(' ')).join(' L '),fill:'none',
-    stroke:cssv('--ktg'),'stroke-width':2.2,'stroke-linejoin':'round'}));
+  const pts=mis.map((mi,i)=>sh[i]===null? null : [L+i*bw+bw/2,yl(sh[i])]);
+  drawGapLine(s, pts, cssv('--ktg'), 2.2);
   pts.forEach((p,i)=>{
+    if(!p) return;
     const lb=txt(p[0], p[1]-10, pct(sh[i],2));    // подпись доли над точкой, с обводкой фоном
     lb.setAttribute('fill',cssv('--ktg')); lb.setAttribute('font-size','9.5');
     lb.setAttribute('font-weight','700'); lb.setAttribute('pointer-events','none');
@@ -992,8 +1000,10 @@ function trend(A){
   document.getElementById('lgTrend').innerHTML=
     bus.map((b,k)=>`<span><i style="background:${cssv(SER[k%SER.length])}"></i>${esc(BUS[b])}</span>`).join('')
     +`<span><i style="background:${cssv('--ktg')};border-radius:99px"></i>доля, правая ось</span>`;
-  document.getElementById('capTrend').textContent=
-    `столбцы — KT&G в коробках (1 MC = 500 пачек) по группам канала, линия — Volume Share`;
+  document.getElementById('capTrend').innerHTML=
+    `столбцы — KT&G в коробках (1 MC = 500 пачек) по группам канала, линия — Volume Share`+
+    (gaps? ` · <b>месяцев без выгрузки: ${gaps}</b> — столбца нет, линия разорвана, `+
+           `пунктир через разрыв показывает вероятный ход` : '');
 }
 
 /* ---------- список сетей, паспорт, свод, сети ---------- */
@@ -1364,14 +1374,16 @@ function tblNet(A){
     `<tr class="nettotal"><td></td><td class="name"><b>${esc(tot.name)}</b></td>${premCell(tot)}${cells(tot)}</tr>`+
     rows.map(r=>{
       const op=!!open[r.key];
+      const gc=r.bu? 'g'+BUS.indexOf(r.bu) : 'g9';       // цвет группы, как на вкладке «Данные»
       let h=`<tr class="netrow${r.kids?' haskids':''}" data-k="${esc(r.key)}" data-oi="${r.oi===undefined?'':r.oi}">
-        <td style="text-align:left">${esc(r.bu)}</td>`+
-        `<td class="name">${r.kids?`<span class="tw-caret">${op?'▾':'▸'}</span> `:''}<b>${esc(r.name)}</b>`+
+        <td class="${gc}" style="text-align:left">${esc(r.bu)}</td>`+
+        `<td class="name ${gc}">${r.kids?`<span class="tw-caret">${op?'▾':'▸'}</span> `:''}<b>${esc(r.name)}</b>`+
         `${r.lag?` <span class="lag">(${esc(r.lag)})</span>`:''}${r.agg?'<span class="pill">агрегат</span>':''}</td>`+
         premCell(r)+cells(r)+`</tr>`;
       if(r.kids&&op) r.kids.forEach(k=>{
-        h+=`<tr class="sub netsub" data-oi="${k.oi}"><td style="text-align:left">${esc(k.bu)}</td>`+
-           `<td class="name">${esc(k.name)}`+
+        const gk=k.bu? 'g'+BUS.indexOf(k.bu) : 'g9';
+        h+=`<tr class="sub netsub" data-oi="${k.oi}"><td class="${gk}" style="text-align:left">${esc(k.bu)}</td>`+
+           `<td class="name ${gk}">${esc(k.name)}`+
            `${k.lag?` <span class="lag">(${esc(k.lag)})</span>`:''}</td>`+
            premCell(k)+cells(k)+`</tr>`;});
       return h;
@@ -2166,8 +2178,10 @@ function chSio(A){
     si[m]= ok ? v : null;
   });
   const bars=mis.map(mi=>(si[mi]===null?null:(si[mi]||0)/MC));
-  const line=mis.map(mi=>(so[mi]||0)/MC);
-  const max=Math.max(1,...bars.filter(v=>v!==null)), lmax=Math.max(1,...line)*1.18;
+  const line=mis.map(mi=>so[mi]===undefined? null : so[mi]/MC);   // нет скан-данных — разрыв
+  const gaps=mis.filter(mi=>so[mi]===undefined).length;
+  const max=Math.max(1,...bars.filter(v=>v!==null));
+  const lmax=Math.max(1,...line.filter(v=>v!==null))*1.18;
   const bw=(W-L-R)/mis.length, pad=Math.max(2,bw*0.2);
   const y=v=>T+(H-T-B)*(1-v/max), yl=v=>T+(H-T-B)*(1-v/lmax);
   const step=Math.ceil(mis.length/(ph?6:13));
@@ -2177,7 +2191,8 @@ function chSio(A){
       const h=(H-T-B)*v/max;
       const rect=el('rect',{x:L+i*bw+pad,y:y(v),width:Math.max(1,bw-pad*2),height:h,
         fill:cssv('--s3')||cssv('--s1'),rx:2,opacity:.55});
-      hover(rect,`<b>${mfull(M[mi])}</b><br><span class="r">Sell In ${fmt(v)} MC<br>Sell Out ${fmt(line[i])} MC</span>`);
+      hover(rect,`<b>${mfull(M[mi])}</b><br><span class="r">Sell In ${fmt(v)} MC<br>`+
+        `Sell Out ${line[i]===null?'нет данных':fmt(line[i])+' MC'}</span>`);
       s.appendChild(rect);
       if(h>=30){
         const lb=txt(L+i*bw+bw/2, y(v)+h/2+3, fmtShort(v));
@@ -2188,10 +2203,10 @@ function chSio(A){
     }
     if(i%step===0||i===mis.length-1) s.appendChild(txt(L+i*bw+bw/2,H-10,mlab(M[mi]),'tick'));
   });
-  const P=mis.map((mi,i)=>[L+i*bw+bw/2, yl(line[i])]);
-  s.appendChild(el('path',{d:'M'+P.map(p=>p.join(' ')).join(' L '),fill:'none',
-    stroke:cssv('--s2'),'stroke-width':2.2,'stroke-linejoin':'round'}));
+  const P=mis.map((mi,i)=>line[i]===null? null : [L+i*bw+bw/2, yl(line[i])]);
+  drawGapLine(s, P, cssv('--s2'), 2.2);
   P.forEach((p,i)=>{
+    if(!p) return;
     const lb=txt(p[0],p[1]-10,fmtShort(line[i]));
     lb.setAttribute('fill',cssv('--s2')); lb.setAttribute('font-size','9.5');
     lb.setAttribute('font-weight','700'); lb.setAttribute('pointer-events','none');
@@ -2214,6 +2229,7 @@ function chSio(A){
   document.getElementById('capSio').innerHTML=
     `столбцы — отгрузки в сеть (пачки из файла Sell In), линия — продажи KT&G из скан-данных, все категории. `+
     `Sell Out берётся по всем категориям: отгрузки по категориям не делятся.`+
+    (gaps? ` <b>Месяцев без скан-данных: ${gaps}</b> — линия разорвана.` : '')+
     (x5only?` <b>Отгрузки по этой сети не выделяются</b> — выбери «X5», чтобы увидеть Sell In.`:'');
 }
 
@@ -2232,13 +2248,17 @@ function trendCat(A){
     if(S.bu!=='' && buOfOff[o]!=+S.bu) return;
     qc[m]=(qc[m]||0)+a; pc[m]=(pc[m]||0)+posFix(o,p);
   });
-  const vals=mis.map(mi=>(qc[mi]||0)/MC), pts=mis.map(mi=>pc[mi]||0);
-  const max=Math.max(1,...vals), pmax=Math.max(1,...pts)*1.18;
+  const has=mi=>qc[mi]!==undefined;                        // месяц с выгрузкой
+  const vals=mis.map(mi=>has(mi)? (qc[mi]||0)/MC : null);
+  const pts=mis.map(mi=>has(mi)? (pc[mi]||0) : null);
+  const gaps=mis.filter(mi=>!has(mi)).length;
+  const max=Math.max(1,...vals.filter(v=>v!==null));
+  const pmax=Math.max(1,...pts.filter(v=>v!==null))*1.18;
   const bw=(W-L-R)/mis.length, pad=Math.max(2,bw*0.2);
   const y=v=>T+(H-T-B)*(1-v/max), yl=v=>T+(H-T-B)*(1-v/pmax);
   const step=Math.ceil(mis.length/(ph?6:13));
   mis.forEach((mi,i)=>{
-    const v=vals[i]; if(v>0){
+    const v=vals[i]; if(v!==null && v>0){
       const h=(H-T-B)*v/max;
       const rect=el('rect',{x:L+i*bw+pad,y:y(v),width:Math.max(1,bw-pad*2),height:h,
         fill:cssv('--s1'),rx:2,opacity:.55});
@@ -2253,10 +2273,10 @@ function trendCat(A){
     }
     if(i%step===0||i===mis.length-1) s.appendChild(txt(L+i*bw+bw/2,H-10,mlab(M[mi]),'tick'));
   });
-  const P=mis.map((mi,i)=>[L+i*bw+bw/2, yl(pts[i])]);
-  s.appendChild(el('path',{d:'M'+P.map(p=>p.join(' ')).join(' L '),fill:'none',
-    stroke:cssv('--s2'),'stroke-width':2.2,'stroke-linejoin':'round'}));
+  const P=mis.map((mi,i)=>pts[i]===null? null : [L+i*bw+bw/2, yl(pts[i])]);
+  drawGapLine(s, P, cssv('--s2'), 2.2);
   P.forEach((p,i)=>{
+    if(!p) return;
     const lb=txt(p[0],p[1]-10,fmtShort(pts[i]));
     lb.setAttribute('fill',cssv('--s2')); lb.setAttribute('font-size','9.5');
     lb.setAttribute('font-weight','700'); lb.setAttribute('pointer-events','none');
@@ -2275,8 +2295,9 @@ function trendCat(A){
   document.getElementById('lgCat').innerHTML=
     `<span><i style="background:${cssv('--s1')};opacity:.55"></i>категория, MC</span>`+
     `<span><i style="background:${cssv('--s2')};border-radius:99px"></i>точек с продажами, правая ось</span>`;
-  document.getElementById('capCat').textContent=
-    `столбцы — объём категории в коробках, линия — число точек с продажами категории`;
+  document.getElementById('capCat').innerHTML=
+    `столбцы — объём категории в коробках, линия — число точек с продажами категории`+
+    (gaps? ` · <b>месяцев без выгрузки: ${gaps}</b> — столбца нет, линия разорвана` : '');
 }
 
 /* ---------- Volume Share: доли производителей и изменение к прошлому месяцу ---------- */
