@@ -172,6 +172,15 @@ table.pfxtbl tr.segrow{cursor:pointer}
 .prembadge.pc3{background:rgba(42,120,214,.14);color:#2467b5}
 .prembadge.pc4{background:rgba(201,133,0,.18);color:#96650a}
 .prembadge.pc5{background:rgba(217,89,38,.16);color:#b0461e}
+.statrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0 16px}
+.statrow .st{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}
+.statrow .st .t{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.statrow .st .v{font-size:19px;font-weight:700;margin-top:2px}
+.statrow .st .d{font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+.alert .wmc{display:inline-block;margin-left:10px;padding:1px 8px;border-radius:99px;
+  background:var(--wash);color:var(--ink2);font-size:11px;font-weight:700;white-space:nowrap}
+.alert.info{border-left-color:var(--axis)}
+.alert.info .ic{color:var(--muted)}
 .insbox{margin:14px 0 4px;padding:12px 16px;border:1px solid var(--line);border-radius:10px;
   background:var(--wash)}
 .insbox .hd{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
@@ -545,9 +554,16 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
 
   <section id="t-внимание" hidden>
     <div class="card">
-      <h2>Что требует внимания</h2>
-      <div class="cap" id="capAlert"></div>
-      <div id="alerts"></div>
+      <div class="svod">
+        <aside class="netlist" id="alrNets"></aside>
+        <div>
+          <h2 id="alrHdr">Что требует внимания</h2>
+          <div class="cap" id="capAlert"></div>
+          <div id="alrStat"></div>
+          <div id="alerts"></div>
+        </div>
+      </div>
+      <div class="note" id="alrNote"></div>
     </div>
   </section>
 
@@ -2537,48 +2553,279 @@ function tblSeg(A){
 
 /* ---------- внимание ---------- */
 function alerts(A){
-  const box=document.getElementById('alerts'); const out=[]; const mi=S.month;
-  OFF.forEach((o,oi)=>{
-    if(!netOk(oi)) return;
-    if(S.bu!=='' && buOfOff[oi]!=+S.bu) return;
-    const x=A.byOff[oi]||{}; const c=x[mi], p=mi>0?x[mi-1]:null;
-    if(!c) return;
-    if(c.all>=1e6 && c.ktg===0) out.push(['red',
-      `<b>${esc(o)}</b> — продаж KT&G нет при объёме сети ${fmtShort(c.all)} пачек. Проверить листинг.`]);
-    if(!p||p.ktg<5000) return;
-    const d=(c.ktg-p.ktg)/p.ktg;
-    if(d<=-0.15) out.push(['red',
-      `<b>${esc(o)}</b> — KT&G ${sgn(d)} к ${mlab(M[mi-1])}: ${fmt(p.ktg)} → ${fmt(c.ktg)} пачек (${fmtShort(c.ktg-p.ktg)}). Канал в сети ${sgn(p.all?(c.all-p.all)/p.all:0)}.`]);
-    else if(d>=0.20) out.push(['green',
-      `<b>${esc(o)}</b> — KT&G ${sgn(d)} к ${mlab(M[mi-1])}: ${fmt(p.ktg)} → ${fmt(c.ktg)} пачек.`]);
-    const s1=p.all?p.ktg/p.all:0, s2=c.all?c.ktg/c.all:0;
-    if(s1>0 && s2-s1<=-0.005) out.push(['yellow',
-      `<b>${esc(o)}</b> — доля KT&G ${pp(s2-s1)}: ${pct(s1,2)} → ${pct(s2,2)}.`]);
+  // Раздел для ответственного за сеть: что ухудшается, что растёт недостаточно,
+  // что активировать и сколько это стоит в коробках. Свой фильтр сетей — как на «Регионах».
+  const rBu=S.alrBu===undefined?'':S.alrBu, rNet=S.alrNet===undefined?'':S.alrNet;
+  const ok=oi=>{
+    if(hidden(oi)) return false;
+    if(rNet===X5KEY) return X5M.has(+oi);
+    if(rNet!=='') return +oi===+rNet;
+    if(rBu!=='') return buOfOff[oi]==+rBu;
+    return true;
+  };
+  alrNetList('alrNets');
+  const one = rNet!=='' && rNet!==X5KEY;          // выбрана одна сеть — полный разбор
+  const oi1 = one? +rNet : null;
+  const who = rNet!=='' ? (rNet===X5KEY?'X5 (группа)':OFF[oi1]) : (rBu!==''? BUS[rBu] : 'весь канал');
+
+  // ── помесячный ряд по срезу
+  const P={};                                     // month -> агрегат мер
+  (D.facts_perf||[]).forEach(r=>{
+    const [m,o,c,qc,qk,pc,pk,cik,spp,sk,psk,stk,stc]=r;
+    if(c!==CATI || !ok(o)) return;
+    const a=P[m]||(P[m]={qc:0,qk:0,pc:0,pk:0,cik:0,stc:0,psk:0});
+    a.qc+=qc; a.qk+=qk; a.pc+=posFix(o,pc); a.pk+=pk; a.cik+=cik; a.stc+=(stc||0); a.psk+=(psk||0);
   });
-  if(mi>0){
-    const cur=new Set(), prev={};
-    D.facts_sku.forEach(r=>{
-      if(r[5]!==CATI) return;
-      if(!netOk(r[1])) return;
-      if(S.bu!=='' && buOfOff[r[1]]!=+S.bu) return;
-      if(MF[SKMF[r[2]]]!==KTG) return;
-      if(r[0]===mi) cur.add(r[2]);
-      if(r[0]===mi-1) prev[r[2]]=(prev[r[2]]||0)+r[3];
-    });
-    const gone=Object.entries(prev).filter(([si,q])=>!cur.has(+si)&&q>=1000).sort((a,b)=>b[1]-a[1]);
-    if(gone.length) out.push(['yellow',
-      `Выпало SKU KT&G: ${gone.length} — ${gone.slice(0,3).map(g=>esc(SK[g[0]])+' ('+fmtShort(g[1])+')').join(', ')}${gone.length>3?' и др.':''}`]);
+  const mons=Object.keys(P).map(Number).sort((a,b)=>a-b);
+  if(!mons.length){
+    document.getElementById('alerts').innerHTML=
+      `<div class="alert yellow"><span class="ic">●</span><div>По этому срезу данных нет.</div></div>`;
+    document.getElementById('alrStat').innerHTML='';
+    document.getElementById('capAlert').textContent='';
+    return;
   }
-  const order={red:0,yellow:1,green:2};
-  out.sort((a,b)=>order[a[0]]-order[b[0]]);
-  box.innerHTML=out.length?out.slice(0,16).map(a=>
-    `<div class="alert ${a[0]}"><span class="ic">${a[0]==='red'?'▲':a[0]==='yellow'?'●':'▼'}</span><div>${a[1]}</div></div>`).join('')
-    :`<div class="alert green"><span class="ic">✓</span><div>За порогами ничего нет.</div></div>`;
-  document.getElementById('capAlert').textContent=
-    `пороги: KT&G ±15/20 % к прошлому месяцу от 5 000 пачек, потеря доли от 0,5 п.п., нулевые продажи при объёме от 1 млн, выпавшие SKU от 1 000 пачек`;
+  const em=mons[mons.length-1], pm=mons.length>1?mons[mons.length-2]:null;
+  // ── свои пороги для каждой сети: месячный разброс у Бристоля 0,03 п.п. по доле,
+  // у Винлаба 0,59 п.п. — единый порог одну сеть глушит, другую заваливает шумом.
+  // Порог = 1,5σ по помесячным изменениям ЗА ИСКЛЮЧЕНИЕМ последнего (чтобы событие
+  // не завышало собственный порог), но не мягче минимума и не жёстче.
+  const K_SIGMA=1.5;
+  const sdOf=arr=>{ if(arr.length<2) return null;
+    const mu=arr.reduce((a,b)=>a+b,0)/arr.length;
+    return Math.sqrt(arr.reduce((a,b)=>a+(b-mu)*(b-mu),0)/arr.length); };
+  const mVal={
+    share: m=>P[m].qc? P[m].qk/P[m].qc : 0,
+    numd:  m=>P[m].pc? P[m].pk/P[m].pc : 0,
+    ppd:   m=>P[m].pk? P[m].qk/P[m].pk/daysIn(M[m]) : 0,
+  };
+  const MIN_ABS={share:0.0002, numd:0.003, ppd:0.02};   // ниже этого — шум в любом случае
+  const FALLBACK={share:0.0005, numd:0.01, ppd:0.05};   // если истории меньше 4 месяцев
+  function thr(key){
+    const f=mVal[key];
+    const d=[]; for(let i=1;i<mons.length-1;i++) d.push(f(mons[i])-f(mons[i-1]));  // без последнего
+    const sd=sdOf(d);
+    if(sd===null || d.length<3) return {t:FALLBACK[key], sd:null, n:d.length};
+    return {t:Math.max(MIN_ABS[key], K_SIGMA*sd), sd, n:d.length};
+  }
+  const TH={share:thr('share'), numd:thr('numd'), ppd:thr('ppd')};
+  const zTxt=(d,th)=>th.sd? ` <span class="muted">(обычный разброс ±${(th.sd*(th===TH.ppd?1:100)).toFixed(2).replace('.',',')}`+
+    `${th===TH.ppd?'':' п.п.'}, это ${Math.abs(d/th.sd).toFixed(1).replace('.',',')}σ)</span>`
+    : ` <span class="muted">(истории мало — порог по умолчанию)</span>`;
+  const cur=P[em], prev=pm!==null?P[pm]:null;
+  const days=daysIn(M[em]);
+  const share=x=>x&&x.qc? x.qk/x.qc : 0;
+  const numd =x=>x&&x.pc? x.pk/x.pc : 0;
+  const ppd  =x=>x&&x.pk? x.qk/x.pk/daysIn(M[em]) : 0;
+
+  // ── статус сети одной строкой
+  const TARGET=0.015;
+  const chanQc=(()=>{let t=0;(D.facts_perf||[]).forEach(r=>{if(r[2]===CATI&&r[0]===em)t+=r[3];});return t;})();
+  const weight=chanQc? cur.qc/chanQc : 0;
+  const gapMC=(cur.qc*TARGET-cur.qk)/MC;
+  const pv=one? PREM_BY_OFF[oi1] : null;
+  const cls2=pv? premClass(pv.ppi) : null;
+  document.getElementById('alrHdr').innerHTML=`Что требует внимания — ${esc(who)}`;
+  document.getElementById('alrStat').innerHTML=
+    `<div class="statrow">`+
+    `<div class="st"><div class="t">Доля KT&G</div><div class="v">${pct(share(cur),2)}</div>`+
+      `<div class="d">цель 1,5 % · разрыв ${fmt(Math.round(gapMC))} MC/мес</div></div>`+
+    `<div class="st"><div class="t">Вес в канале</div><div class="v">${pct(weight,1)}</div>`+
+      `<div class="d">категория ${fmt(Math.round(cur.qc/MC))} MC</div></div>`+
+    `<div class="st"><div class="t">Num Distr</div><div class="v">${pct(numd(cur),1)}</div>`+
+      `<div class="d">${fmt(cur.pk)} из ${fmt(Math.round(cur.pc))} ТТ</div></div>`+
+    `<div class="st"><div class="t">PPD KT&G</div><div class="v">${ppd(cur).toFixed(2).replace('.',',')}</div>`+
+      `<div class="d">пачек на активную точку в день</div></div>`+
+    (cls2?`<div class="st"><div class="t">Ценовой профиль</div><div class="v">${cls2[0]}</div>`+
+      `<div class="d">PPI ${pv.ppi.toFixed(2)} по шкале 1–5</div></div>`:'')+
+    `</div>`;
+
+  const out=[];                                    // [вес в MC, класс, текст]
+  const add=(mc,kind,html)=>out.push([mc,kind,html]);
+
+  // ── 1. что ухудшается
+  if(prev){
+    const ds=share(cur)-share(prev);
+    if(ds<=-TH.share.t) add(Math.abs(ds)*cur.qc/MC,'red',
+      `<b>Доля падает.</b> ${pct(share(prev),2)} → ${pct(share(cur),2)} (${pp(ds)}) за месяц`+
+      zTxt(ds,TH.share)+`. В коробках это ${fmt(Math.round(Math.abs(ds)*cur.qc/MC))} MC потерянного объёма.`);
+    const dn=numd(cur)-numd(prev);
+    if(dn<=-TH.numd.t) add(Math.abs(dn)*cur.pc*ppd(cur)*days/MC,'red',
+      `<b>Дистрибуция сжимается.</b> Num Distr ${pct(numd(prev),1)} → ${pct(numd(cur),1)} (${pp(dn)})`+
+      zTxt(dn,TH.numd)+`, минус ${fmt(Math.round(prev.pk-cur.pk))} точек с KT&G.`);
+    const dp=(ppd(cur)-(prev.pk? prev.qk/prev.pk/daysIn(M[pm]):0));
+    if(dp<=-TH.ppd.t && prev.pk) add(Math.abs(dp)*cur.pk*days/MC,'yellow',
+      `<b>Продажи на точку падают.</b> PPD ${(prev.qk/prev.pk/daysIn(M[pm])).toFixed(2).replace('.',',')} → `+
+      `${ppd(cur).toFixed(2).replace('.',',')}`+zTxt(dp,TH.ppd)+
+      ` — при том же покрытии это ${fmt(Math.round(Math.abs(dp)*cur.pk*days/MC))} MC.`);
+  }
+  // ── 2. рост медленнее группы
+  if(prev && cur.qk>prev.qk){
+    let g={qk:0}, gp={qk:0};
+    (D.facts_perf||[]).forEach(r=>{
+      if(r[2]!==CATI) return;
+      if(one && buOfOff[r[1]]!==buOfOff[oi1]) return;
+      if(r[0]===em) g.qk+=r[4]; else if(r[0]===pm) gp.qk+=r[4];
+    });
+    const my=(cur.qk-prev.qk)/prev.qk, grp=gp.qk? (g.qk-gp.qk)/gp.qk : 0;
+    if(my<grp-0.02) add((grp-my)*prev.qk/MC,'yellow',
+      `<b>Растём медленнее группы.</b> Сеть ${sgn(my)} к прошлому месяцу, ${one?BUS[buOfOff[oi1]]:'канал'} ${sgn(grp)}. `+
+      `Догнать темп группы — это ${fmt(Math.round((grp-my)*prev.qk/MC))} MC.`);
+  }
+  // ── 3. выпавшие SKU
+  if(pm!==null){
+    const curS=new Set(), prevS={};
+    D.facts_sku.forEach(r=>{
+      const [m,o,si,q,n,c]=r;
+      if(c!==CATI || !ok(o) || MF[SKMF[si]]!==KTG) return;
+      if(m===em) curS.add(si);
+      else if(m===pm) prevS[si]=(prevS[si]||0)+q;
+    });
+    const gone=Object.entries(prevS).filter(([si,q])=>!curS.has(+si)&&q>=500)
+      .sort((a,b)=>b[1]-a[1]);
+    if(gone.length) add(gone.reduce((a,g)=>a+g[1],0)/MC,'red',
+      `<b>Выпало SKU: ${gone.length}.</b> ${gone.slice(0,3).map(g=>esc(SK[g[0]])+' — '+fmt(Math.round(g[1]/MC))+' MC').join(', ')}`+
+      `${gone.length>3?' и ещё '+(gone.length-3):''}. Всего ${fmt(Math.round(gone.reduce((a,g)=>a+g[1],0)/MC))} MC ушло с полки.`);
+  }
+  // ── 4. регионы с провальной дистрибуцией
+  if(one){
+    const reg={};
+    (D.facts_geo||[]).forEach(r=>{
+      const [m,o,b,ri,qa,qk,na,nk,c]=r;
+      if(m!==em || c!==CATI || o!==oi1) return;
+      const k=RG[ri]; const a=reg[k]||(reg[k]={qa:0,qk:0,na:0,nk:0});
+      a.qa+=qa; a.qk+=qk; a.na+=na; a.nk+=nk;
+    });
+    const avg=numd(cur);
+    const bad=Object.entries(reg).filter(([k,v])=>v.na>=200 && v.nk/v.na < avg*0.6)
+      .map(([k,v])=>[k,v,(avg-v.nk/v.na)*v.na*ppd(cur)*days/MC])
+      .sort((a,b)=>b[2]-a[2]).slice(0,3);
+    if(bad.length) add(bad.reduce((a,b)=>a+b[2],0),'yellow',
+      `<b>Регионы без дистрибуции.</b> `+
+      bad.map(([k,v,mc])=>`${esc(k)} — Num Distr ${pct(v.nk/v.na,1)} против ${pct(avg,1)} по сети (+${fmt(Math.round(mc))} MC)`).join('; ')+
+      `. Довести их до среднего по сети — ${fmt(Math.round(bad.reduce((a,b)=>a+b[2],0)))} MC/мес.`);
+  }
+  // ── 5. ассортимент: ядро сети против нашего портфеля
+  if(one && D.facts_pfx && D.facts_pfx.length){
+    const year=+M[em].slice(0,4);
+    const mis=M.map((m,k)=>k).filter(k=>+M[k].slice(0,4)===year && k<=em);
+    const netSeg={}; let nt=0;
+    D.facts_pfx.forEach(r=>{
+      const [m,o,ki,c,gi2,fi2,li2,q]=r;
+      if(c!==CATI || o!==oi1 || !mis.includes(m)) return;
+      const sg=SEG[gi2]; if(!PSEG_W[sg]) return;
+      netSeg[sg]=(netSeg[sg]||0)+q; nt+=q;
+    });
+    const ktgSeg={}; let kt=0;
+    const ATTR=D.sku_attr||[];
+    (D.facts_sku||[]).forEach(r=>{
+      const [m,o,si,q,n,c]=r;
+      if(c!==CATI || o!==oi1 || !mis.includes(m) || MF[SKMF[si]]!==KTG) return;
+      const a=ATTR[si]; if(!a) return;
+      const sg=a[0]==='2 High'?'2 HIGH':a[0]; if(!PSEG_W[sg]) return;
+      ktgSeg[sg]=(ktgSeg[sg]||0)+q; kt+=q;
+    });
+    const nTop=Object.entries(netSeg).sort((a,b)=>b[1]-a[1])[0];
+    const kTop=Object.entries(ktgSeg).sort((a,b)=>b[1]-a[1])[0];
+    if(nTop&&kTop&&nTop[0]!==kTop[0]){
+      const share2=nt? nTop[1]/nt : 0;
+      add(Math.max(0,(share2*cur.qc*TARGET - (ktgSeg[nTop[0]]||0)/mis.length)/MC),'yellow',
+        `<b>Портфель мимо ядра сети.</b> ${p1x(kTop[1]/kt)}% наших продаж в <b>${esc(kTop[0])}</b>, `+
+        `а ${p1x(share2)}% объёма сети — в <b>${esc(nTop[0])}</b>. Ввод позиций ${esc(nTop[0])} открывает `+
+        `${fmt(Math.round(share2*cur.qc/MC))} MC рынка, где нас почти нет.`);
+    }
+  }
+  // ── 5a. возможности: цель по доле и непокрытые точки
+  if(gapMC>0) add(gapMC,'green',
+    `<b>До цели 1,5 %.</b> Сейчас ${pct(share(cur),2)} — это ${fmt(Math.round(cur.qk/MC))} MC в месяц. `+
+    `Цель даёт ${fmt(Math.round(cur.qc*TARGET/MC))} MC, разрыв <b>${fmt(Math.round(gapMC))} MC/мес</b> `+
+    `(${fmt(Math.round(gapMC*12))} MC в год).`);
+  const freePos=Math.round(cur.pc-cur.pk);
+  if(freePos>50 && ppd(cur)>0) add(freePos*ppd(cur)*days/MC,'green',
+    `<b>Точки без KT&G: ${fmt(freePos)}.</b> При нынешнем PPD ${ppd(cur).toFixed(2).replace('.',',')} `+
+    `каждая такая точка стоит ${fmt(Math.round(ppd(cur)*days))} пачек в месяц — весь резерв покрытия `+
+    `${fmt(Math.round(freePos*ppd(cur)*days/MC))} MC/мес.`);
+  // ── 5b. для канала и группы — где разрыв до цели самый большой
+  if(!one){
+    const per={};
+    (D.facts_perf||[]).forEach(r=>{
+      const [m,o,c,qc,qk]=r;
+      if(c!==CATI || m!==em || !ok(o)) return;
+      const a=per[o]||(per[o]={qc:0,qk:0}); a.qc+=qc; a.qk+=qk;
+    });
+    const top=Object.entries(per).map(([o,v])=>[OFF[o],(v.qc*TARGET-v.qk)/MC,v.qc?v.qk/v.qc:0])
+      .filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    if(top.length) add(top.reduce((a,x)=>a+x[1],0),'green',
+      `<b>Где разрыв до цели самый большой.</b> `+
+      top.map(x=>`${esc(x[0].replace('F_',''))} — доля ${pct(x[2],2)}, разрыв ${fmt(Math.round(x[1]))} MC/мес`).join('; ')+
+      `. Эти три сети дают ${fmt(Math.round(top.reduce((a,x)=>a+x[1],0)))} MC из общего разрыва.`);
+  }
+
+  // ── 6. отгрузки
+  const siM=(()=>{const t={};(D.sellin||[]).forEach(([m,o,v])=>{if(ok(o))t[m]=(t[m]||0)+v;});
+    if(rNet===X5KEY||(rNet===''&&rBu==='')) (D.sellin_x5||[]).forEach(([m,v])=>t[m]=(t[m]||0)+v);
+    return t;})();
+  const si=siM[em], so=cur.qk;
+  if(si){
+    const rt=so/si;
+    if(rt<0.8) add((si-so)/MC,'yellow',
+      `<b>Товар оседает.</b> Sell Out / Sell In ${pct(rt,0)}: отгрузили ${fmt(Math.round(si/MC))} MC, `+
+      `продали ${fmt(Math.round(so/MC))} MC. Разница ${fmt(Math.round((si-so)/MC))} MC — запас в сети или на РЦ.`);
+    else if(rt>1.25) add((so-si)/MC,'red',
+      `<b>Продаём больше, чем отгружаем.</b> Sell Out / Sell In ${pct(rt,0)} — сеть распродаёт запас, `+
+      `риск OOS. Проверить заказ на следующий месяц.`);
+  }
+  // ── 7. данные
+  const infos=[];
+  if(em!==S.month) infos.push(`Выгрузки за ${mfull(M[S.month])} нет — весь разбор по ${mfull(M[em])}.`);
+  if(!cur.stc) infos.push(`Сеть не присылает остатки — блок стоков и Num Stock Distr по ней недоступен.`);
+  if(one && !si) infos.push(`Отгрузки по этой сети не выделяются${X5M.has(oi1)?' — они приходят одной строкой на группу X5':''}.`);
+
+  const kept=out.filter(a=>a[0]>=5);              // пункт дешевле 5 MC внимания не стоит
+  kept.sort((a,b)=>b[0]-a[0]);
+  const ic={red:'▲',yellow:'●',green:'▼'};
+  document.getElementById('alerts').innerHTML =
+    (kept.length? kept.map(a=>`<div class="alert ${a[1]}"><span class="ic">${ic[a[1]]}</span>`+
+      `<div>${a[2]}<span class="wmc">${fmt(Math.round(a[0]))} MC</span></div></div>`).join('')
+     : `<div class="alert green"><span class="ic">✓</span><div>За порогами ничего нет: доля и дистрибуция не падают, SKU не выпадали.</div></div>`)+
+    (infos.length? `<div class="alert info"><span class="ic">i</span><div>${infos.join('<br>')}</div></div>`:'');
+
+  document.getElementById('capAlert').innerHTML=
+    `${mfull(M[em])} · сортировка по цене вопроса в коробках · цель по доле <b>1,5 %</b>`;
+  const thTxt=k=>TH[k].sd
+    ? `${(TH[k].t*(k==='ppd'?1:100)).toFixed(2).replace('.',',')}${k==='ppd'?'':' п.п.'}`
+    : 'по умолчанию';
+  document.getElementById('alrNote').innerHTML=
+    `<b>Пороги считаются под конкретную сеть.</b> Для каждой меры берётся её же месячный разброс `+
+    `за всю историю (σ по изменениям месяц к месяцу, без последнего, чтобы событие не завышало `+
+    `собственный порог), тревога — при отклонении хуже 1,5σ. Сейчас для этого среза: `+
+    `доля ${thTxt('share')}, Num Distr ${thTxt('numd')}, PPD ${thTxt('ppd')} `+
+    `(история ${TH.share.n} мес.). Если истории меньше четырёх месяцев, берётся порог по умолчанию — `+
+    `доля 0,05 п.п., Num Distr 1 п.п., PPD 0,05. `+
+    `Прочие пороги: выпавшие SKU от 500 пачек, `+
+    `регион с Num Distr ниже 60 % от среднего по сети при 200+ точках, Sell Out / Sell In вне 80–125 %. `+
+    `Цифра справа от каждого пункта — во сколько коробок он обходится или сколько даёт: `+
+    `для падений это потерянный объём, для возможностей — доступный. Расчёт от последнего месяца с данными.`;
+}
+function p1x(v){ return (v*100).toFixed(1).replace('.',','); }
+function alrNetList(elId){
+  const box=document.getElementById(elId); if(!box) return;
+  const bu=S.alrBu===undefined?'':S.alrBu, net=S.alrNet===undefined?'':S.alrNet;
+  const cur=(net===''&&bu==='')?'all':(net!==''?'n'+net:'b'+bu);
+  const it=(id,lab)=>`<button class="${cur===id?'on':''}" data-s="${id}">${esc(lab)}</button>`;
+  const ord=OFF.map((n,i)=>[n,i]).filter(([n,i])=>!hidden(i)&&(bu===''||buOfOff[i]==+bu))
+    .sort((a,b)=>a[0].localeCompare(b[0],'ru'));
+  box.innerHTML='<button class="resetnet" data-s="all">Сбросить фильтр</button>'+
+    '<div class="hd">Итоги</div>'+it('all','Все сети')+
+    BUS.map((b,i)=>it('b'+i,b)).join('')+(X5M.size?it('n'+X5KEY,'X5 (группа)'):'')+
+    '<div class="sep"></div><div class="hd">Сети</div>'+ord.map(([n,i])=>it('n'+i,n)).join('');
+  box.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
+    const v=b.dataset.s;
+    if(v==='all'){ S.alrNet=''; S.alrBu=''; }
+    else if(v[0]==='b'){ S.alrBu=v.slice(1); S.alrNet=''; }
+    else { S.alrNet=v.slice(1); }
+    render();});
 }
 
-/* ---------- данные ---------- */
 function cover(A){
   // Вкладка «Данные» — служебная: она про то, ЧТО ПРИШЛО от сетей, а не про срез,
   // который сейчас разглядывают на других вкладках. Поэтому карта полноты НЕ реагирует
