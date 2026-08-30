@@ -283,7 +283,11 @@ table.koo th.rowh,table.koo td.rowh{white-space:nowrap}
 /* auto-раскладка: первые три столбца сжимаются по содержимому (width:1% + nowrap),
    остаток ширины забирают колонки с числами. При fixed заданные px раздувались
    пропорционально, и «Группа» получала 93 px вместо 56. */
-#tblNet{table-layout:auto;width:100%;min-width:0}
+/* таблица по содержимому: столбцы с мерами одинаковой ширины и не тянутся за окном */
+/* при table-layout:auto заданная ширина столбца — лишь «предпочтительная»: если таблице
+   достаётся больше места, столбцы растут пропорционально. Поэтому ограничиваем таблицу
+   суммой своих колонок — 434 px на текстовые плюс 7×104 на меры. */
+#tblNet{table-layout:auto;width:auto!important;min-width:0!important;max-width:1180px}
 #tblNet td.name,#tblNet th[data-k="name"],#tblNet th[data-k="bu"],#tblNet th[data-k="ppi"]{text-align:left}
 /* заливка группы канала — та же, что на вкладке «Данные» */
 #tblNet td.g0{background:var(--grp1)}
@@ -301,6 +305,7 @@ table.koo th.rowh,table.koo td.rowh{white-space:nowrap}
 #tblNet th:first-child,#tblNet td:first-child,
 #tblNet th:nth-child(2),#tblNet td:nth-child(2),
 #tblNet th:nth-child(3),#tblNet td:nth-child(3){width:1%;white-space:nowrap}
+#tblNet th:nth-child(n+4),#tblNet td:nth-child(n+4){width:104px;min-width:104px}
 #tblNet td.spark{width:96px}
 /* группы столбцов: объём и доля · точки и дистрибуция · изменения */
 #tblNet thead th.g1{background:var(--grp1);box-shadow:inset 0 -2px 0 var(--grp1b)}
@@ -2153,7 +2158,7 @@ function chSio(A){
   const ph=isPhone();
   const start=Math.max(0, M.indexOf('2025-01'));
   const mis=[]; for(let k=start;k<=S.month;k++) mis.push(k);
-  const W=ph?620:980, H=ph?250:300, L=ph?12:14, R=ph?42:52, T=26, B=30;
+  const W=ph?620:980, H=ph?250:300, L=ph?12:14, R=ph?46:56, T=26, B=30;
   const s=svg(W,H);
   // Sell Out — по всем категориям: отгрузки по категориям не делятся
   const so={};
@@ -2177,59 +2182,54 @@ function chSio(A){
     }
     si[m]= ok ? v : null;
   });
-  const bars=mis.map(mi=>(si[mi]===null?null:(si[mi]||0)/MC));
-  const line=mis.map(mi=>so[mi]===undefined? null : so[mi]/MC);   // нет скан-данных — разрыв
-  const gaps=mis.filter(mi=>so[mi]===undefined).length;
-  const max=Math.max(1,...bars.filter(v=>v!==null));
-  const lmax=Math.max(1,...line.filter(v=>v!==null))*1.18;
-  const bw=(W-L-R)/mis.length, pad=Math.max(2,bw*0.2);
-  const y=v=>T+(H-T-B)*(1-v/max), yl=v=>T+(H-T-B)*(1-v/lmax);
+  // обе меры в коробках — значит одна шкала, сравнение прямое
+  const inV =mis.map(mi=>(si[mi]===null||si[mi]===undefined)? null : si[mi]/MC);
+  const outV=mis.map(mi=>so[mi]===undefined? null : so[mi]/MC);
+  const gapsIn =mis.filter((mi,i)=>inV[i]===null).length;
+  const gapsOut=mis.filter((mi,i)=>outV[i]===null).length;
+  const all=[...inV,...outV].filter(v=>v!==null);
+  const max=Math.max(1,...all)*1.15;
+  const bw=(W-L-R)/mis.length;
+  const px=i=>L+i*bw+bw/2;
+  const y=v=>T+(H-T-B)*(1-v/max);
   const step=Math.ceil(mis.length/(ph?6:13));
-  mis.forEach((mi,i)=>{
-    const v=bars[i];
-    if(v!==null && v>0){
-      const h=(H-T-B)*v/max;
-      const rect=el('rect',{x:L+i*bw+pad,y:y(v),width:Math.max(1,bw-pad*2),height:h,
-        fill:cssv('--s3')||cssv('--s1'),rx:2,opacity:.55});
-      hover(rect,`<b>${mfull(M[mi])}</b><br><span class="r">Sell In ${fmt(v)} MC<br>`+
-        `Sell Out ${line[i]===null?'нет данных':fmt(line[i])+' MC'}</span>`);
-      s.appendChild(rect);
-      if(h>=30){
-        const lb=txt(L+i*bw+bw/2, y(v)+h/2+3, fmtShort(v));
-        lb.setAttribute('fill',cssv('--ink')); lb.setAttribute('font-size','9.5');
-        lb.setAttribute('font-weight','600'); lb.setAttribute('pointer-events','none');
-        s.appendChild(lb);
+  for(let i=0;i<=3;i++){const v=max*i/3;
+    s.appendChild(el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),class:'axisline',opacity:i?.25:1}));
+    s.appendChild(txt(W-R+6,y(v)+4,fmtShort(v),'tick','start'));}
+  mis.forEach((mi,i)=>{ if(i%step===0||i===mis.length-1)
+    s.appendChild(txt(px(i),H-10,mlab(M[mi]),'tick')); });
+  const draw=(arr,color,lab,dy)=>{
+    drawGapLine(s, arr.map((v,i)=>v===null? null : [px(i), y(v)]), color, 2.2);
+    arr.forEach((v,i)=>{
+      if(v===null) return;
+      const c=el('circle',{cx:px(i),cy:y(v),r:ph?4.4:3.4,fill:cssv('--page'),
+        stroke:color,'stroke-width':2});
+      hover(c,`<b>${mfull(M[mis[i]])}</b><br><span class="r">${lab} ${fmt(v)} MC`+
+        ((inV[i]!==null&&outV[i]!==null&&inV[i])?`<br>Sell Out / Sell In ${pct(outV[i]/inV[i],0)}`:'')+`</span>`);
+      s.appendChild(c);
+      if(i%step===0||i===arr.length-1){
+        const t2=txt(px(i), y(v)+dy, fmtShort(v));
+        t2.setAttribute('fill',color); t2.setAttribute('font-size','9.5');
+        t2.setAttribute('font-weight','700'); t2.setAttribute('pointer-events','none');
+        t2.setAttribute('stroke',cssv('--surface')); t2.setAttribute('stroke-width','3');
+        t2.setAttribute('paint-order','stroke fill');
+        s.appendChild(t2);
       }
-    }
-    if(i%step===0||i===mis.length-1) s.appendChild(txt(L+i*bw+bw/2,H-10,mlab(M[mi]),'tick'));
-  });
-  const P=mis.map((mi,i)=>line[i]===null? null : [L+i*bw+bw/2, yl(line[i])]);
-  drawGapLine(s, P, cssv('--s2'), 2.2);
-  P.forEach((p,i)=>{
-    if(!p) return;
-    const lb=txt(p[0],p[1]-10,fmtShort(line[i]));
-    lb.setAttribute('fill',cssv('--s2')); lb.setAttribute('font-size','9.5');
-    lb.setAttribute('font-weight','700'); lb.setAttribute('pointer-events','none');
-    lb.setAttribute('stroke',cssv('--surface')); lb.setAttribute('stroke-width','3');
-    lb.setAttribute('paint-order','stroke fill');
-    s.appendChild(lb);
-    const c=el('circle',{cx:p[0],cy:p[1],r:ph?4.4:3.6,fill:cssv('--page'),
-      stroke:cssv('--s2'),'stroke-width':2});
-    hover(c,`<b>${mfull(M[mis[i]])}</b><br><span class="r">Sell Out ${fmt(line[i])} MC</span>`);
-    s.appendChild(c);
-  });
-  for(let i=0;i<=2;i++){const v=lmax*i/2;
-    s.appendChild(txt(W-R+6,yl(v)+4,fmtShort(v),'tick','start'));}
-  s.appendChild(el('line',{x1:L,x2:W-R,y1:y(0),y2:y(0),class:'axisline'}));
+    });
+  };
+  draw(inV, cssv('--s3'), 'Sell In', -10);
+  draw(outV, cssv('--s2'), 'Sell Out', 16);
   box.appendChild(s);
   document.getElementById('lgSio').innerHTML=
-    `<span><i style="background:${cssv('--s3')||cssv('--s1')};opacity:.55"></i>Sell In, MC</span>`+
-    `<span><i style="background:${cssv('--s2')};border-radius:99px"></i>Sell Out, MC — правая ось</span>`;
+    `<span><i style="background:${cssv('--s3')};border-radius:99px"></i>Sell In, MC — отгрузки в сеть</span>`+
+    `<span><i style="background:${cssv('--s2')};border-radius:99px"></i>Sell Out, MC — продажи из скан-данных</span>`;
   const x5only = S.net!=='' && S.net!==X5KEY && X5M.has(+S.net);
   document.getElementById('capSio').innerHTML=
-    `столбцы — отгрузки в сеть (пачки из файла Sell In), линия — продажи KT&G из скан-данных, все категории. `+
-    `Sell Out берётся по всем категориям: отгрузки по категориям не делятся.`+
-    (gaps? ` <b>Месяцев без скан-данных: ${gaps}</b> — линия разорвана.` : '')+
+    `обе линии в коробках на одной шкале: зелёная — отгрузки из файла Sell In, оранжевая — `+
+    `продажи KT&G из скан-данных по всем категориям (отгрузки по категориям не делятся). `+
+    `Разрыв между линиями — товар, осевший в сети или, наоборот, распроданный запас.`+
+    (gapsOut? ` <b>Месяцев без скан-данных: ${gapsOut}</b> — линия разорвана.` : '')+
+    (gapsIn&&!x5only? ` <b>Месяцев без отгрузок: ${gapsIn}</b>.` : '')+
     (x5only?` <b>Отгрузки по этой сети не выделяются</b> — выбери «X5», чтобы увидеть Sell In.`:'');
 }
 
