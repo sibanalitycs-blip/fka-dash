@@ -172,6 +172,15 @@ table.pfxtbl tr.segrow{cursor:pointer}
 .prembadge.pc3{background:rgba(42,120,214,.14);color:#2467b5}
 .prembadge.pc4{background:rgba(201,133,0,.18);color:#96650a}
 .prembadge.pc5{background:rgba(217,89,38,.16);color:#b0461e}
+.kmbox{margin:16px 0 4px;padding:14px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.kmbox .hd{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.kmbox ol{margin:0;padding-left:20px}
+.kmbox li{font-size:12.5px;line-height:1.6;margin-bottom:10px;padding-left:6px}
+.kmbox li:last-child{margin-bottom:0}
+.kmbox li i{color:var(--ink2);font-style:normal;background:var(--wash);padding:1px 5px;border-radius:4px}
+.kmbox li.km-red{border-left:3px solid var(--bad);margin-left:-9px;padding-left:12px}
+.kmbox li.km-yellow{border-left:3px solid var(--s4);margin-left:-9px;padding-left:12px}
+.kmbox li.km-green{border-left:3px solid var(--good);margin-left:-9px;padding-left:12px}
 .statrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0 16px}
 .statrow .st{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}
 .statrow .st .t{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
@@ -561,6 +570,7 @@ footer{font-size:11.5px;color:var(--muted);line-height:1.6;padding-top:4px}
           <div class="cap" id="capAlert"></div>
           <div id="alrStat"></div>
           <div id="alerts"></div>
+          <div id="alrKm"></div>
         </div>
       </div>
       <div class="note" id="alrNote"></div>
@@ -2788,6 +2798,124 @@ function alerts(A){
       `<div>${a[2]}<span class="wmc">${fmt(Math.round(a[0]))} MC</span></div></div>`).join('')
      : `<div class="alert green"><span class="ic">✓</span><div>За порогами ничего нет: доля и дистрибуция не падают, SKU не выпадали.</div></div>`)+
     (infos.length? `<div class="alert info"><span class="ic">i</span><div>${infos.join('<br>')}</div></div>`:'');
+
+  // ── повестка для категорийного менеджера: конкретика по SKU и регионам
+  const km=[];
+  const p3=mons.length>3? mons[mons.length-4] : null;   // три месяца назад
+  if(one){
+    // 1. дистрибуция по SKU: точки, где позиция реально продаётся
+    const bySku={};
+    (D.facts_sku||[]).forEach(r=>{
+      const [m,o,si,q,n,c]=r;
+      if(c!==CATI || o!==oi1 || MF[SKMF[si]]!==KTG) return;
+      if(m!==em && m!==pm && m!==p3) return;
+      const a=bySku[si]||(bySku[si]={});
+      a[m]={q,n};
+    });
+    const rowsS=Object.entries(bySku).map(([si,a])=>({
+      si:+si, name:SK[si],
+      q:(a[em]||{}).q||0, n:(a[em]||{}).n||0,
+      qp:(a[pm]||{}).q||0, np:(a[pm]||{}).n||0,
+      q3:(a[p3]||{}).q||0, n3:(a[p3]||{}).n||0}));
+    // категория сети как база: растёт рынок или нет
+    const catG=(prev&&prev.qc)? (cur.qc-prev.qc)/prev.qc : 0;
+    // 1a. SKU теряет точки
+    rowsS.filter(r=>r.np>=200 && (r.n-r.np)/r.np<=-0.03)
+      .sort((a,b)=>(a.n-a.np)-(b.n-b.np)).slice(0,3).forEach(r=>{
+      const lost=r.np-r.n;
+      km.push([lost*ppd(cur)*days/MC,'red',
+        `<b>${esc(r.name)} уходит с полки:</b> ${fmt(r.np)} → ${fmt(r.n)} точек за месяц (−${fmt(lost)}), `+
+        `за три месяца ${r.n3? (r.n-r.n3>=0?'+':'−')+fmt(Math.abs(r.n-r.n3)) : '—'}. `+
+        `<i>Спросить у КМ: делистинг, смена планограммы или OOS? Запросить список точек, где позиция выведена.</i>`]);
+    });
+    // 1b. SKU не растёт, хотя категория в сети растёт
+    if(catG>0.02) rowsS.filter(r=>r.qp>=5000 && (r.q-r.qp)/r.qp < catG-0.05)
+      .sort((a,b)=>(a.q-a.qp)/(a.qp||1)-(b.q-b.qp)/(b.qp||1)).slice(0,3).forEach(r=>{
+      const d=(r.q-r.qp)/r.qp;
+      km.push([Math.max(0,(catG-d)*r.qp/MC),'yellow',
+        `<b>${esc(r.name)} отстаёт от сети:</b> ${sgn(d)} за месяц при росте категории ${sgn(catG)}. `+
+        `Держим ${fmt(r.n)} точек. <i>Спросить у КМ: цена и промо по позиции, место на полке, `+
+        `остатки на РЦ. Догнать темп категории — ${fmt(Math.round((catG-d)*r.qp/MC))} MC.</i>`]);
+    });
+    // 1b2. точки на месте, а объём упал — значит вопрос не в листинге, а в цене или месте
+    rowsS.filter(r=>r.np>=200 && r.qp>=2500 && Math.abs((r.n-r.np)/r.np)<0.03 && (r.q-r.qp)/r.qp<=-0.08)
+      .sort((a,b)=>(a.q-a.qp)-(b.q-b.qp)).slice(0,2).forEach(r=>{
+      const d=(r.q-r.qp)/r.qp;
+      km.push([Math.abs(r.q-r.qp)/MC,'yellow',
+        `<b>${esc(r.name)}: полка та же, продажи падают.</b> ${sgn(d)} за месяц при ${fmt(r.n)} точках `+
+        `(было ${fmt(r.np)}). <i>Вопрос КМ: изменилась ли цена или выкладка, не встал ли рядом конкурент `+
+        `по промо. Потеря ${fmt(Math.round(Math.abs(r.q-r.qp)/MC))} MC.</i>`]);
+    });
+    // 1c. что растёт — закрепить
+    rowsS.filter(r=>r.np>=200 && (r.n-r.np)/r.np>=0.05)
+      .sort((a,b)=>(b.n-b.np)-(a.n-a.np)).slice(0,2).forEach(r=>{
+      km.push([(r.n-r.np)*ppd(cur)*days/MC,'green',
+        `<b>${esc(r.name)} набирает точки:</b> ${fmt(r.np)} → ${fmt(r.n)} (+${fmt(r.n-r.np)}) за месяц, `+
+        `+${fmt(r.n-r.n3)} за три. <i>Зафиксировать с КМ: что сработало (промо, планограмма, цена) `+
+        `и перенести на ${esc(rowsS.filter(x=>x.si!==r.si).sort((a,b)=>b.q-a.q)[0]?.name||'другие позиции')}.</i>`]);
+    });
+    // 2. регионы: наша динамика против динамики категории в том же регионе
+    const rg={}, rgP={};
+    (D.facts_geo||[]).forEach(r=>{
+      const [m,o,b,ri,qa,qk,na,nk,c]=r;
+      if(c!==CATI || o!==oi1) return;
+      const k=RG[ri];
+      if(m===em){ const a=rg[k]||(rg[k]={qa:0,qk:0,na:0,nk:0}); a.qa+=qa;a.qk+=qk;a.na+=na;a.nk+=nk; }
+      else if(m===pm){ const a=rgP[k]||(rgP[k]={qa:0,qk:0,na:0,nk:0}); a.qa+=qa;a.qk+=qk;a.na+=na;a.nk+=nk; }
+    });
+    const regRows=Object.keys(rg).filter(k=>rgP[k]&&rg[k].qa/MC>=300).map(k=>{
+      const a=rg[k], b=rgP[k];
+      return {k, dCat:b.qa? (a.qa-b.qa)/b.qa : 0, dKtg:b.qk? (a.qk-b.qk)/b.qk : 0,
+              dPos:a.nk-b.nk, qa:a.qa, qk:a.qk, nd:a.na? a.nk/a.na : 0};
+    });
+    regRows.filter(r=>r.dCat>0.01 && r.dKtg<r.dCat-0.03 && r.qk>0)
+      .sort((a,b)=>(a.dKtg-a.dCat)-(b.dKtg-b.dCat)).slice(0,3).forEach(r=>{
+      const mcGap=(r.dCat-r.dKtg)*r.qk/MC;
+      km.push([mcGap,'yellow',
+        `<b>${esc(r.k)}: рынок растёт, мы нет.</b> Категория ${sgn(r.dCat)}, KT&G ${sgn(r.dKtg)} `+
+        `за месяц, точек с KT&G ${r.dPos>=0?'+':'−'}${fmt(Math.abs(r.dPos))}. Num Distr ${pct(r.nd,1)}. `+
+        `<i>Обсудить с КМ по этому кластеру: заказ и наличие на РЦ региона, распределение по магазинам. `+
+        `Догнать динамику региона — ${fmt(Math.round(mcGap))} MC.</i>`]);
+    });
+    // 2b. белые пятна: магазины региона, торгующие категорией, но без наших продаж
+    regRows.map(r=>({...r, free:Math.round(r.qa? (r.nd? (r.nd>0? (r.qa,0):0):0):0)}));
+    const freeRows=Object.keys(rg).map(k=>{
+      const a=rg[k];
+      return {k, free:a.na-a.nk, nd:a.na? a.nk/a.na : 0, qa:a.qa};
+    }).filter(r=>r.free>=150 && r.nd<0.6).sort((a,b)=>b.free-a.free).slice(0,3);
+    if(freeRows.length) km.push([freeRows.reduce((a,r)=>a+r.free,0)*ppd(cur)*days/MC,'yellow',
+      `<b>Белые пятна по регионам:</b> `+
+      freeRows.map(r=>`${esc(r.k)} — ${fmt(r.free)} магазинов без KT&G (Num Distr ${pct(r.nd,1)}, `+
+        `категория ${fmt(Math.round(r.qa/MC))} MC)`).join('; ')+
+      `. <i>Принести КМ список этих точек и просить ввод в матрицу кластера: `+
+      `${fmt(Math.round(freeRows.reduce((a,r)=>a+r.free,0)*ppd(cur)*days/MC))} MC/мес при нынешнем PPD.</i>`]);
+    regRows.filter(r=>r.dCat>0 && r.dKtg<=-0.05 && r.qk/MC>=2)
+      .sort((a,b)=>a.dKtg-b.dKtg).slice(0,2).forEach(r=>{
+      km.push([Math.abs(r.dKtg)*r.qk/MC,'red',
+        `<b>${esc(r.k)}: продажи падают на растущем рынке.</b> KT&G ${sgn(r.dKtg)}, категория ${sgn(r.dCat)} `+
+        `за месяц, Num Distr ${pct(r.nd,1)}. <i>Вопрос КМ: были ли перебои с поставкой на РЦ региона, `+
+        `менялась ли планограмма или цена. Вернуть прошлый уровень — ${fmt(Math.round(Math.abs(r.dKtg)*r.qk/MC))} MC.</i>`]);
+    });
+    regRows.filter(r=>r.dPos<=-20)
+      .sort((a,b)=>a.dPos-b.dPos).slice(0,2).forEach(r=>{
+      km.push([Math.abs(r.dPos)*ppd(cur)*days/MC,'red',
+        `<b>${esc(r.k)}: теряем точки.</b> Минус ${fmt(Math.abs(r.dPos))} магазинов с KT&G за месяц `+
+        `при динамике категории ${sgn(r.dCat)}. <i>Запросить у КМ выгрузку по точкам региона: `+
+        `где нулевые продажи два месяца подряд — это либо OOS, либо вывод из матрицы.</i>`]);
+    });
+  }
+  const kb=document.getElementById('alrKm');
+  km.sort((a,b)=>b[0]-a[0]);
+  const kk=km.filter(a=>a[0]>=1).slice(0,8);
+  if(kb) kb.innerHTML = one
+    ? (kk.length
+        ? `<div class="kmbox"><div class="hd">Повестка встречи с категорийным менеджером — ${esc(who)}</div>`+
+          `<ol>`+kk.map(a=>`<li class="km-${a[1]}">${a[2]}<span class="wmc">${fmt(Math.round(a[0]))} MC</span></li>`).join('')+
+          `</ol></div>`
+        : `<div class="kmbox"><div class="hd">Повестка встречи с категорийным менеджером</div>`+
+          `<div class="muted" style="font-size:12.5px">По SKU и регионам сдвигов за порогами нет — обсуждать нечего, кроме пунктов выше.</div></div>`)
+    : `<div class="kmbox"><div class="hd">Повестка встречи с категорийным менеджером</div>`+
+      `<div class="muted" style="font-size:12.5px">Выбери конкретную сеть слева — повестка строится по её SKU и регионам.</div></div>`;
 
   document.getElementById('capAlert').innerHTML=
     `${mfull(M[em])} · сортировка по цене вопроса в коробках · цель по доле <b>1,5 %</b>`;
