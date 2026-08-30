@@ -163,6 +163,15 @@ h2.mt{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
 .pfxlgd{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0 130px;font-size:10.5px;color:var(--muted)}
 .pfxlgd i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
 table.pfxtbl tr.segrow{cursor:pointer}
+.prembadge.sm{margin-left:0;padding:2px 8px;font-size:10.5px}
+.ppin{font-size:10.5px;color:var(--muted);margin-left:4px;font-variant-numeric:tabular-nums}
+.prembadge{display:inline-block;margin-left:10px;padding:3px 10px;border-radius:99px;
+  font-size:11.5px;font-weight:700;vertical-align:middle;cursor:help}
+.prembadge.pc1{background:rgba(213,81,129,.16);color:#b8365f}
+.prembadge.pc2{background:rgba(25,158,112,.16);color:#12805a}
+.prembadge.pc3{background:rgba(42,120,214,.14);color:#2467b5}
+.prembadge.pc4{background:rgba(201,133,0,.18);color:#96650a}
+.prembadge.pc5{background:rgba(217,89,38,.16);color:#b0461e}
 .insbox{margin:14px 0 4px;padding:12px 16px;border:1px solid var(--line);border-radius:10px;
   background:var(--wash)}
 .insbox .hd{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
@@ -245,11 +254,21 @@ table.koo th.agg,table.koo td.agg,table.koo th.st3,table.koo td.st3{width:94px}
 /* колонка мер шире, строки одной высоты — названия не переносятся */
 table.koo th.rowh,table.koo td.rowh{white-space:nowrap}
 /* вкладка «Сети»: колонки одной ширины, заголовки переносятся */
-#tblNet{table-layout:fixed;width:100%;min-width:0}
+/* auto-раскладка: первые три столбца сжимаются по содержимому (width:1% + nowrap),
+   остаток ширины забирают колонки с числами. При fixed заданные px раздувались
+   пропорционально, и «Группа» получала 93 px вместо 56. */
+#tblNet{table-layout:auto;width:100%;min-width:0}
+#tblNet td.name,#tblNet th[data-k="name"],#tblNet th[data-k="bu"],#tblNet th[data-k="ppi"]{text-align:left}
+#tblNet th[data-k="bu"]{width:56px}                 /* по ширине «FKA 1» */
+#tblNet th[data-k="name"]{width:186px}              /* самое длинное — «F_Перекресток (февраль)» */
+#tblNet th[data-k="ppi"]{width:132px}               /* бейдж «MID-HIGH +» плюс число */
+#tblNet td.name{white-space:nowrap;line-height:1.25}
 #tblNet thead th{white-space:normal;line-height:1.25;vertical-align:bottom;font-size:10.5px}
-#tblNet th,#tblNet td{width:92px;padding:6px 8px}
-#tblNet th:first-child,#tblNet td:first-child{width:190px}
-#tblNet th:nth-child(2),#tblNet td:nth-child(2){width:74px}
+#tblNet th,#tblNet td{padding:6px 8px}
+/* порядок столбцов: Группа · Сеть · Класс премиальности · дальше меры */
+#tblNet th:first-child,#tblNet td:first-child,
+#tblNet th:nth-child(2),#tblNet td:nth-child(2),
+#tblNet th:nth-child(3),#tblNet td:nth-child(3){width:1%;white-space:nowrap}
 #tblNet td.spark{width:96px}
 /* группы столбцов: объём и доля · точки и дистрибуция · изменения */
 #tblNet thead th.g1{background:var(--grp1);box-shadow:inset 0 -2px 0 var(--grp1b)}
@@ -969,6 +988,73 @@ function netListInto(elId){
 }
 
 /* ---------- паспорт: заголовок объекта ---------- */
+// ── класс премиальности сети. PPI = Σ(доля ценового сегмента × ранг),
+// ранги PREMIUM 5 · HIGH 4 · MID-HIGH 3 · MID-LOW 2 · VFM 1.
+// Класс — сегмент, к которому PPI ближе всего; знак «+»/«−» — выше или ниже
+// медианы сетей того же класса, то есть «сильнее/слабее сопоставимых сетей».
+const PSEG_W={'1 PREMIUM':5,'2 HIGH':4,'2 High':4,'3 MID-HIGH':3,'4 MID-LOW':2,'5 VFM':1};
+const PSEG_NAME={5:'PREMIUM',4:'HIGH',3:'MID-HIGH',2:'MID-LOW',1:'VFM'};
+function premIndex(filterFn){
+  if(!D.facts_pfx || !D.facts_pfx.length) return null;
+  const year=+M[S.month].slice(0,4);
+  const mis=M.map((m,k)=>k).filter(k=>+M[k].slice(0,4)===year && k<=S.month);
+  const seg={}; let tot=0, ph=0, vfm=0;
+  D.facts_pfx.forEach(r=>{
+    const [m,o,ki,c,gi2,fi2,li2,q]=r;
+    if(c!==CATI || !mis.includes(m)) return;
+    if(filterFn && !filterFn(o)) return;
+    const sg=SEG[gi2]; const w=PSEG_W[sg]; if(!w) return;
+    seg[sg]=(seg[sg]||0)+q; tot+=q;
+    if(w>=4) ph+=q;
+    if(w===1) vfm+=q;
+  });
+  if(!tot) return null;
+  const ppi=Object.entries(seg).reduce((a,[k,v])=>a+v/tot*PSEG_W[k],0);
+  return {ppi, ph:ph/tot, vfm:vfm/tot, months:mis.length, mc:tot/MC};
+}
+// PPI по каждой сети одним проходом: премиальность нужна и в шапке Паспорта,
+// и колонкой на вкладке «Сети» — считать premIndex по сети в цикле дорого
+const PREM_BY_OFF=(()=>{
+  const out={};
+  if(!D.facts_pfx || !D.facts_pfx.length) return out;
+  const year=+M[M.length-1].slice(0,4);
+  const yset=new Set(M.map((m,k)=>k).filter(k=>+M[k].slice(0,4)===year));
+  const acc={};
+  D.facts_pfx.forEach(r=>{
+    const [m,o,ki,c,gi2,fi2,li2,q]=r;
+    if(c!==CATI || !yset.has(m)) return;
+    const w=PSEG_W[SEG[gi2]]; if(!w) return;
+    const a=acc[o]||(acc[o]={t:0,s:0});
+    a.t+=q; a.s+=q*w;
+  });
+  Object.entries(acc).forEach(([o,a])=>{ if(a.t) out[o]={ppi:a.s/a.t, mc:a.t/MC}; });
+  return out;
+})();
+// медианы PPI по классам — считаем один раз по всем сетям канала
+const PREM_MED=(()=>{
+  const out={};
+  if(!D.facts_pfx || !D.facts_pfx.length) return out;
+  const per=[];
+  OFF.forEach((n,oi)=>{
+    if(hidden(oi)) return;
+    const v=PREM_BY_OFF[oi];
+    if(v && v.mc>=200) per.push(v.ppi);          // мелочь до 200 MC медиану не портит
+  });
+  const grp={};
+  per.forEach(p=>{const rk=Math.max(1,Math.min(5,Math.round(p))); (grp[rk]=grp[rk]||[]).push(p);});
+  Object.entries(grp).forEach(([rk,arr])=>{
+    arr.sort((a,b)=>a-b); const n=arr.length;
+    out[rk]= n%2? arr[(n-1)/2] : (arr[n/2-1]+arr[n/2])/2;
+  });
+  return out;
+})();
+function premClass(ppi){
+  const rk=Math.max(1,Math.min(5,Math.round(ppi)));
+  const med=PREM_MED[rk];
+  const plus=(med===undefined)? (ppi>=rk) : (ppi>=med);
+  return [`${PSEG_NAME[rk]} ${plus?'+':'−'}`, 'pc'+(6-rk), med];
+}
+
 function passport(A){
   netListInto('pasNets');
   const who = S.net!=='' ? netLabel() : (S.bu!=='' ? BUS[S.bu] : 'Канал FKA целиком');
@@ -987,8 +1073,19 @@ function passport(A){
   const lagNote = EM!==S.month
     ? ` · <b class="lagbadge">данные за ${mfullname(M[EM])} ${M[EM].slice(0,4)}</b> — за ${mfull(M[S.month])} выгрузки нет`
     : '';
+  // класс премиальности — по текущему срезу (сеть, группа или весь канал)
+  const pf=premIndex(oi=>netOk(oi) && (S.bu===''||buOfOff[oi]==+S.bu));
+  let badge='';
+  if(pf){
+    const [lab,cls2,med]=premClass(pf.ppi);
+    badge=` <b class="prembadge ${cls2}" title="Ценовой профиль сети ${pf.ppi.toFixed(2)} по шкале `+
+      `1 (VFM) – 5 (PREMIUM): средневзвешенный ранг ценового сегмента за ${pf.months} мес. `+
+      `${M[S.month].slice(0,4)} года. Премиум и HIGH ${(pf.ph*100).toFixed(1)} %, VFM ${(pf.vfm*100).toFixed(1)} %.`+
+      (med!==undefined?` Медиана сопоставимых сетей ${med.toFixed(2)} — отсюда знак.`:'')+
+      `">${lab} · ${pf.ppi.toFixed(2)}</b>`;
+  }
   const el=document.getElementById('pasHdr');
-  if(el) el.innerHTML=`${esc(who)}<span>${esc(sub)}${lagNote}</span>`;
+  if(el) el.innerHTML=`${esc(who)}${badge}<span>${esc(sub)}${lagNote}</span>`;
 }
 
 /* ---------- Отгрузки: лист DB отчёта Mr Koo на наших данных ---------- */
@@ -1156,7 +1253,8 @@ function tblNet(A){
     const c=x[mi]; if(!c) return;
     const praw=(A.posOffAll[oi]||{})[mi]||{all:0,ktg:0};
     const p={all:posFix(oi,praw.all), ktg:praw.ktg};
-    raw.push({oi, name:OFF[oi], bu:BUS[buOfOff[oi]]||'', mi,
+    const pv=PREM_BY_OFF[oi];
+    raw.push({oi, name:OFF[oi], bu:BUS[buOfOff[oi]]||'', mi, ppi:pv?pv.ppi:null,
       ktg:c.ktg, all:c.all, pos:p.ktg, posAll:p.all,
       agg:!!(POS_MANUAL[OFF[oi]]),
       days:daysIn(M[mi]),
@@ -1167,7 +1265,10 @@ function tblNet(A){
   const rows=Object.entries(groups).map(([b,list])=>{
     if(list.length===1) return Object.assign({},list[0],{key:b, kids:null});
     const sum=f=>list.reduce((a,r)=>a+(r[f]||0),0);
-    return {key:b, name:b, bu:list[0].bu, kids:list,
+    // у сети с подразделениями ценовой профиль взвешиваем их объёмом категории
+    const wsum=list.reduce((a,r)=>a+(r.ppi!==null?r.all:0),0);
+    const wppi=wsum? list.reduce((a,r)=>a+(r.ppi!==null?r.ppi*r.all:0),0)/wsum : null;
+    return {key:b, name:b, bu:list[0].bu, kids:list, ppi:wppi,
       ktg:sum('ktg'), all:sum('all'), pos:sum('pos'), posAll:sum('posAll'),
       days:list[0].days, lag:list[0].lag, agg:false};
   });
@@ -1179,7 +1280,7 @@ function tblNet(A){
   };
   rows.forEach(fin); rows.forEach(r=>(r.kids||[]).forEach(fin));
 
-  const KEY={name:r=>r.name, bu:r=>r.bu, all:r=>r.all, ktg:r=>r.ktg, share:r=>r.share,
+  const KEY={name:r=>r.name, bu:r=>r.bu, ppi:r=>r.ppi, all:r=>r.all, ktg:r=>r.ktg, share:r=>r.share,
     posAll:r=>r.posAll, pos:r=>r.pos, numd:r=>r.numd, ppd:r=>r.ppd};
   const key=S.netSort in KEY ? S.netSort : 'ktg';
   const dir=S.netDir===undefined?-1:S.netDir;
@@ -1192,6 +1293,13 @@ function tblNet(A){
   rows.sort(cmp);
 
   const T=(l,v,c)=>`<td data-label="${l}"${c?' class="'+c+'"':''}>${v}</td>`;
+  const premCell=r=>{
+    if(r.ppi===null||r.ppi===undefined) return `<td data-label="Класс" style="text-align:left">—</td>`;
+    const [lab,cls2]=premClass(r.ppi);
+    return `<td data-label="Класс" style="text-align:left">`+
+      `<b class="prembadge sm ${cls2}" title="Ценовой профиль ${r.ppi.toFixed(2)} по шкале 1 (VFM) – 5 (PREMIUM)">`+
+      `${lab}</b> <span class="ppin">${r.ppi.toFixed(2)}</span></td>`;
+  };
   const cells=r=>
     T('Категория, MC',fmt(r.all/500))+T('KT&G, MC',fmt(r.ktg/500))+
     T('Volume Share, %',pct(r.share,2))+
@@ -1206,23 +1314,27 @@ function tblNet(A){
   const tot={name:'Итого'+(gsel!==''?' · '+BUS[gsel]:' по каналу'), bu:'', kids:null, key:'__total__',
     all:rows.reduce((a,r)=>a+r.all,0), ktg:rows.reduce((a,r)=>a+r.ktg,0),
     pos:rows.reduce((a,r)=>a+r.pos,0), posAll:rows.reduce((a,r)=>a+r.posAll,0),
-    days:daysIn(M[S.month]), lag:null, agg:false};
+    days:daysIn(M[S.month]), lag:null, agg:false,
+    ppi:(()=>{const w=rows.reduce((a,r)=>a+(r.ppi!==null&&r.ppi!==undefined?r.all:0),0);
+      return w? rows.reduce((a,r)=>a+((r.ppi!==null&&r.ppi!==undefined)?r.ppi*r.all:0),0)/w : null;})()};
   fin(tot);
-  t.innerHTML=`<thead><tr>${th('name','Сеть')}${th('bu','Группа')}
+  t.innerHTML=`<thead><tr>${th('bu','Группа')}${th('name','Сеть')}${th('ppi','Класс<br>премиальности','g0')}
     ${th('all','Категория,<br>MC','g1')}${th('ktg','KT&G,<br>MC','g1')}${th('share','Volume<br>Share, %','g1')}
     ${th('posAll','ТТ всего,<br>шт','g2')}${th('pos','ТТ с KT&G,<br>шт','g2')}${th('numd','Num Selling<br>Distr, %','g2')}
     ${th('ppd','PPD<br>категории','g3')}</tr></thead><tbody>`+
-    `<tr class="nettotal"><td class="name"><b>${esc(tot.name)}</b></td><td></td>${cells(tot)}</tr>`+
+    `<tr class="nettotal"><td></td><td class="name"><b>${esc(tot.name)}</b></td>${premCell(tot)}${cells(tot)}</tr>`+
     rows.map(r=>{
       const op=!!open[r.key];
       let h=`<tr class="netrow${r.kids?' haskids':''}" data-k="${esc(r.key)}" data-oi="${r.oi===undefined?'':r.oi}">
-        <td class="name">${r.kids?`<span class="tw-caret">${op?'▾':'▸'}</span> `:''}<b>${esc(r.name)}</b>`+
+        <td style="text-align:left">${esc(r.bu)}</td>`+
+        `<td class="name">${r.kids?`<span class="tw-caret">${op?'▾':'▸'}</span> `:''}<b>${esc(r.name)}</b>`+
         `${r.lag?` <span class="lag">(${esc(r.lag)})</span>`:''}${r.agg?'<span class="pill">агрегат</span>':''}</td>`+
-        `<td style="text-align:left">${esc(r.bu)}</td>`+cells(r)+`</tr>`;
+        premCell(r)+cells(r)+`</tr>`;
       if(r.kids&&op) r.kids.forEach(k=>{
-        h+=`<tr class="sub netsub" data-oi="${k.oi}"><td class="name">${esc(k.name)}`+
+        h+=`<tr class="sub netsub" data-oi="${k.oi}"><td style="text-align:left">${esc(k.bu)}</td>`+
+           `<td class="name">${esc(k.name)}`+
            `${k.lag?` <span class="lag">(${esc(k.lag)})</span>`:''}</td>`+
-           `<td style="text-align:left">${esc(k.bu)}</td>`+cells(k)+`</tr>`;});
+           premCell(k)+cells(k)+`</tr>`;});
       return h;
     }).join('')+`</tbody>`;
 
