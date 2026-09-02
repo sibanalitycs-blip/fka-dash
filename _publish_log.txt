@@ -1,0 +1,27 @@
+=== Публикация витрины FKA — 01.09.2026 23:55 ===
+токен: длина 93, начинается с github_pat_
+
+--- 1. кто владелец токена ---
+  login: sibanalitycs-blip
+
+--- 2. репозиторий sibanalitycs-blip/fka-dash ---
+  код ответа: 200
+
+--- 3. push ---
+  история синхронизирована с GitHub
+  новый коммит создан
+  To https://github.com/sibanalitycs-blip/fka-dash.git
+     a6a8834..8f4e0d8  main -> main
+  branch 'main' set up to track 'origin/main'.
+  итог push: 0
+  upstream: origin
+
+--- 4. GitHub Pages ---
+  статус Pages: 200
+  url: https://sibanalitycs-blip.github.io/fka-dash/ | статус сборки: built
+
+--- 5. страница отвечает? ---
+  https://sibanalitycs-blip.github.io/fka-dash/ → 200
+
+=== готово, отчёт: _pages/_publish_log.txt ===
+Нажми любую клавишу, чтобы закрыть.
