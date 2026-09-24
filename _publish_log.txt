@@ -1,4 +1,4 @@
-=== Публикация витрины FKA — 01.09.2026 23:55 ===
+=== Публикация витрины FKA — 24.09.2026 12:03 ===
 токен: длина 93, начинается с github_pat_
 
 --- 1. кто владелец токена ---
@@ -8,20 +8,24 @@
   код ответа: 200
 
 --- 3. push ---
-  история синхронизирована с GitHub
+error: remote origin already exists.
+  + витрина RKA-LKA
   новый коммит создан
   To https://github.com/sibanalitycs-blip/fka-dash.git
-     a6a8834..8f4e0d8  main -> main
-  branch 'main' set up to track 'origin/main'.
+   ! [rejected]        main -> main (non-fast-forward)
+  error: failed to push some refs to 'https://github.com/sibanalitycs-blip/fka-dash.git'
+  hint: Updates were rejected because the tip of your current branch is behind
+  hint: its remote counterpart. Integrate the remote changes (e.g.
+  hint: 'git pull ...') before pushing again.
+  hint: See the 'Note about fast-forwards' in 'git push --help' for details.
   итог push: 0
-  upstream: origin
+  upstream: НЕ ЗАДАН — push не прошёл
 
 --- 4. GitHub Pages ---
   статус Pages: 200
   url: https://sibanalitycs-blip.github.io/fka-dash/ | статус сборки: built
 
 --- 5. страница отвечает? ---
-  https://sibanalitycs-blip.github.io/fka-dash/ → 200
+  https://sibanalitycs-blip.github.io/fka-dash/ → 000
 
 === готово, отчёт: _pages/_publish_log.txt ===
-Нажми любую клавишу, чтобы закрыть.
