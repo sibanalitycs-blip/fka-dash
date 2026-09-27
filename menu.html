@@ -44,21 +44,21 @@ dt{color:var(--mut)}dd{margin:0}
 <script>
 const BASE='https://sibanalitycs-blip.github.io';
 const D=[
-  {name:'Дата дашборд',alias:'Витрина продаж канала FKA',badge:['b-pass','пароль'],url:BASE+'/fka-dash/',
+  {name:'Data DB',alias:'Витрина продаж канала FKA',badge:['b-pass','пароль'],url:BASE+'/fka-dash/',
    what:'Продажи и доля KT&G по федеральным сетям: паспорт сети, свод, SKU, активности, сегменты, БКГ, регионы. Есть английская версия.',
-   who:'руководство, КАМы',upd:'сборка куба и ярлык «Опубликовать сейчас»',head:BASE+'/fka-dash/index.html'},
-  {name:'Дашборд проекта',alias:'KPI мерчандайзинга по сетям',badge:['b-priv','приватная, claude.ai'],url:'https://claude.ai/artifact/VaLVkZ5674EmxizcMQ23S1',
+   who:'руководство, КАМы',upd:'после приёмки скан-даты: сборка куба и публикация',head:BASE+'/fka-dash/index.html'},
+  {name:'Merch DB (KAM)',alias:'KPI мерчандайзинга по сетям',badge:['b-pass','пароль'],url:BASE+'/fka-dash/merch-kam.html',
    what:'Покрытие плановых точек, AV и стоки по сетям, паспорт сети, KPI details по SKU, точки и визиты, Merch Performance, табель, матрица, методика.',
-   who:'владелец проекта',upd:'пересборка в сессии Claude'},
-  {name:'Пос дашборд',alias:'Карточка торговой точки',badge:['b-open','открыт'],url:BASE+'/pos-dash/',
+   who:'КАМы, руководство',upd:'пересборка и публикация в сессии Claude',head:BASE+'/fka-dash/merch-kam.html'},
+  {name:'POS DB',alias:'Карточка торговой точки',badge:['b-open','открыт'],url:BASE+'/pos-dash/',
    what:'Карточка точки: регион → сеть → адрес; класс точки, продажи категории и KT&G за 12 месяцев, SKU по матрице, визиты со ссылками.',
-   who:'КАМы, полевые команды',upd:'ярлык «Опубликовать_карточку_точки»',meta:BASE+'/pos-dash/pos_data/meta.json'},
-  {name:'Мерч дашборд',alias:'Дашборд мерчандайзера',badge:['b-pass','код из 6 цифр'],url:BASE+'/merch-dash/',
+   who:'КАМы, полевые команды',upd:'после выгрузки визитов: сборка и публикация',meta:BASE+'/pos-dash/pos_data/meta.json'},
+  {name:'Merch DB (merch)',alias:'Дашборд мерчандайзера',badge:['b-pass','код из 6 цифр'],url:BASE+'/merch-dash/',
    what:'План и факт визитов, KPI и динамика на трёх уровнях: мерчандайзер, супервайзер, менеджер проекта.',
-   who:'мерчандайзеры, супервайзеры, менеджер',upd:'ярлык «Опубликовать_сейчас» после недельного конвейера',head:BASE+'/merch-dash/data.json'},
-  {name:'Калькулятор расчёта инкрементала',alias:'Калькулятор листинга',badge:['b-pass','пароль'],url:BASE+'/fka-dash/calc.html',
+   who:'мерчандайзеры, супервайзеры, менеджер',upd:'после недельного конвейера',head:BASE+'/merch-dash/data.json'},
+  {name:'Calculator',alias:'Калькулятор расчёта инкрементала (листинга)',badge:['b-pass','пароль'],url:BASE+'/fka-dash/calc.html',
    what:'Потенциальный объём продаж SKU при листинге в сеть: сеть, SKU и регионы — расчёт от фактической доли SKU в регионе.',
-   who:'КАМы',upd:'ярлык «Опубликовать калькулятор»',head:BASE+'/fka-dash/calc.html'},
+   who:'КАМы',upd:'по новым данным Volume Share',head:BASE+'/fka-dash/calc.html'},
 ];
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
