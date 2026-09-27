@@ -34,47 +34,40 @@ dt{color:var(--mut)}dd{margin:0}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="eyebrow">Аналитика KT&amp;G · меню</div>
-  <h1>Дашборды</h1>
-  <p class="lede">Все дашборды в одном месте. В каждом дашборде есть кнопка «☰ Перейти в меню» — она возвращает сюда, и кнопка «↻ Обновить дашборд» — она загружает последнюю опубликованную версию.</p>
-  <div class="grid" id="grid"></div>
-  <p class="note">«Обновить дашборд» подтягивает последнюю опубликованную версию, а не пересчитывает данные. Пересчёт и публикация идут по регламенту каждого дашборда — строка «Обновляется» в карточке. «Опубликовано» — время последней публикации страницы на сайте.</p>
+<div id="lockScreen" style="min-height:70vh;display:flex;align-items:center;justify-content:center">
+  <form id="lockForm" autocomplete="off" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px;width:100%;max-width:340px;display:grid;gap:12px">
+    <div class="eyebrow">Аналитика KT&amp;G · меню</div>
+    <div style="font-size:20px;font-weight:700">Дашборды</div>
+    <input id="lockPass" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Пароль" aria-label="Пароль" required
+      style="font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)">
+    <button id="lockBtn" type="submit" style="font:inherit;font-size:15px;font-weight:600;padding:10px;border:0;border-radius:8px;background:#c5ef9a;color:#1f3a0a;cursor:pointer">Открыть</button>
+    <div id="lockErr" hidden style="color:#d03b3b;font-size:13px">Пароль не подошёл</div>
+  </form>
 </div>
+<script id="payload" type="application/octet-stream" data-enc="1" data-meta='{"s": "V3O/1CqdIuUFdtP2yzmzNw==", "i": "Dzv8yiZGAp5oOoxI", "n": 600000}'>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</script>
 <script>
-const BASE='https://sibanalitycs-blip.github.io';
-const D=[
-  {name:'Data DB',alias:'Витрина продаж канала FKA',badge:['b-pass','пароль'],url:BASE+'/fka-dash/',
-   what:'Продажи и доля KT&G по федеральным сетям: паспорт сети, свод, SKU, активности, сегменты, БКГ, регионы. Есть английская версия.',
-   who:'руководство, КАМы',upd:'после приёмки скан-даты: сборка куба и публикация',head:BASE+'/fka-dash/index.html'},
-  {name:'Merch DB (KAM)',alias:'KPI мерчандайзинга по сетям',badge:['b-pass','пароль'],url:BASE+'/fka-dash/merch-kam.html',
-   what:'Покрытие плановых точек, AV и стоки по сетям, паспорт сети, KPI details по SKU, точки и визиты, Merch Performance, табель, матрица, методика.',
-   who:'КАМы, руководство',upd:'пересборка и публикация в сессии Claude',head:BASE+'/fka-dash/merch-kam.html'},
-  {name:'POS DB',alias:'Карточка торговой точки',badge:['b-open','открыт'],url:BASE+'/pos-dash/',
-   what:'Карточка точки: регион → сеть → адрес; класс точки, продажи категории и KT&G за 12 месяцев, SKU по матрице, визиты со ссылками.',
-   who:'КАМы, полевые команды',upd:'после выгрузки визитов: сборка и публикация',meta:BASE+'/pos-dash/pos_data/meta.json'},
-  {name:'Merch DB (merch)',alias:'Дашборд мерчандайзера',badge:['b-pass','код из 6 цифр'],url:BASE+'/merch-dash/',
-   what:'План и факт визитов, KPI и динамика на трёх уровнях: мерчандайзер, супервайзер, менеджер проекта.',
-   who:'мерчандайзеры, супервайзеры, менеджер',upd:'после недельного конвейера',head:BASE+'/merch-dash/data.json'},
-  {name:'Calculator',alias:'Калькулятор расчёта инкрементала (листинга)',badge:['b-pass','пароль'],url:BASE+'/fka-dash/calc.html',
-   what:'Потенциальный объём продаж SKU при листинге в сеть: сеть, SKU и регионы — расчёт от фактической доли SKU в регионе.',
-   who:'КАМы',upd:'по новым данным Volume Share',head:BASE+'/fka-dash/calc.html'},
-];
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const pad=n=>String(n).padStart(2,'0');
-const fmt=d=>`${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-document.getElementById('grid').innerHTML=D.map((x,i)=>`
-  <a class="card" href="${esc(x.url)}"${x.url.startsWith(BASE)?'':' target="_blank" rel="noopener"'}>
-    <div class="top"><div><div class="name">${esc(x.name)}</div><div class="alias">${esc(x.alias)}</div></div><span class="badge ${x.badge[0]}">${esc(x.badge[1])}</span></div>
-    <p class="what">${esc(x.what)}</p>
-    <dl><dt>Для кого</dt><dd>${esc(x.who)}</dd><dt>Обновляется</dt><dd>${esc(x.upd)}</dd></dl>
-    <div class="go"><span class="when" id="w${i}">${x.head||x.meta?'опубликовано: проверяю…':'открывается только владельцу'}</span><b>Открыть →</b></div>
-  </a>`).join('');
-// время публикации: заголовок Last-Modified страницы или built_at карточки точки (тот же сайт)
-D.forEach((x,i)=>{ const el=document.getElementById('w'+i);
-  if(x.meta) fetch(x.meta+'?v='+Date.now(),{cache:'no-store'}).then(r=>r.json()).then(m=>{ el.textContent='данные от '+m.built_at.split(' ')[0].split('-').reverse().join('.')+' '+(m.built_at.split(' ')[1]||''); }).catch(()=>{ el.textContent=''; });
-  else if(x.head) fetch(x.head+'?v='+Date.now(),{method:'HEAD',cache:'no-store'}).then(r=>{ const lm=r.headers.get('last-modified'); el.textContent=lm?'опубликовано '+fmt(new Date(lm)):''; }).catch(()=>{ el.textContent=''; });
-});
+(function(){
+  const pl=document.getElementById('payload'), meta=JSON.parse(pl.dataset.meta);
+  const b64=s=>{const r=atob(s),a=new Uint8Array(r.length);for(let i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;};
+  const scr=document.getElementById('lockScreen'), form=document.getElementById('lockForm'), inp=document.getElementById('lockPass'),
+        btn=document.getElementById('lockBtn'), err=document.getElementById('lockErr');
+  async function unlock(pass){
+    const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+    const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(meta.s),iterations:meta.n,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+    const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(meta.i)},key,b64(pl.textContent.trim()));
+    const p=JSON.parse(await new Response(new Blob([pt]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+    pl.remove(); scr.remove();
+    const box=document.createElement('div'); box.innerHTML=p.html; while(box.firstChild) document.body.appendChild(box.firstChild);
+    p.js.forEach(t=>{ const s=document.createElement('script'); s.textContent=t; document.body.appendChild(s); });
+  }
+  let saved=null; try{saved=sessionStorage.getItem('menu-pass');}catch(e){}
+  const quiet=async()=>{ if(!saved) return false; try{ await unlock(saved); return true; }catch(e){ try{sessionStorage.removeItem('menu-pass');}catch(_){} return false; } };
+  quiet().then(ok=>{ if(ok) return; inp.focus();
+    form.onsubmit=async ev=>{ ev.preventDefault(); err.hidden=true; btn.disabled=true; btn.textContent='Проверяю…';
+      try{ await unlock(inp.value); try{sessionStorage.setItem('menu-pass',inp.value);}catch(e){} }
+      catch(e){ err.hidden=false; btn.disabled=false; btn.textContent='Открыть'; inp.select(); } };
+  });
+})();
 </script>
 </body>
 </html>
