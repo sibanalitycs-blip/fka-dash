@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Дашборды KT&amp;G</title>
+<style>
+:root{--bg:#f4f5f3;--card:#fff;--ink:#15181a;--ink2:#4a5056;--mut:#7c838a;--line:#e1e4df;--acc:#1d4fc4;--acc-soft:#e6ecfb;--ok:#0b7a3b;--ok-soft:#e5f4e3;--warn-soft:#fdf1d4;--lock:#8a5a00}
+@media (prefers-color-scheme:dark){:root{--bg:#111314;--card:#1a1c1d;--ink:#eef0ee;--ink2:#b6bbb8;--mut:#8a908d;--line:#2c3031;--acc:#7ea2ff;--acc-soft:#1e2a45;--ok:#6fd49a;--ok-soft:#16301a;--warn-soft:#3a2f12;--lock:#e7b75a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;padding:32px 16px 48px}
+.wrap{max-width:1080px;margin:0 auto}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+h1{font-size:28px;margin:4px 0 6px}
+.lede{color:var(--ink2);max-width:70ch;margin:0 0 24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+.card:hover{border-color:var(--acc);box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.card:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.name{font-size:18px;font-weight:700;line-height:1.25}
+.alias{font-size:12px;color:var(--mut);margin-top:2px}
+.badge{flex:0 0 auto;font-size:11.5px;font-weight:600;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.b-pass{background:var(--warn-soft);color:var(--lock)}
+.b-open{background:var(--ok-soft);color:var(--ok)}
+.b-priv{background:var(--acc-soft);color:var(--acc)}
+.what{color:var(--ink2);font-size:14px;margin:0}
+dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:13px}
+dt{color:var(--mut)}dd{margin:0}
+.go{margin-top:auto;display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--line);font-size:13px}
+.go b{color:var(--acc)}
+.when{color:var(--mut);font-variant-numeric:tabular-nums}
+.note{color:var(--mut);font-size:12.5px;margin-top:22px;max-width:80ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Аналитика KT&amp;G · меню</div>
+  <h1>Дашборды</h1>
+  <p class="lede">Все дашборды в одном месте. В каждом дашборде есть кнопка «☰ Перейти в меню» — она возвращает сюда, и кнопка «↻ Обновить дашборд» — она загружает последнюю опубликованную версию.</p>
+  <div class="grid" id="grid"></div>
+  <p class="note">«Обновить дашборд» подтягивает последнюю опубликованную версию, а не пересчитывает данные. Пересчёт и публикация идут по регламенту каждого дашборда — строка «Обновляется» в карточке. «Опубликовано» — время последней публикации страницы на сайте.</p>
+</div>
+<script>
+const BASE='https://sibanalitycs-blip.github.io';
+const D=[
+  {name:'Дата дашборд',alias:'Витрина продаж канала FKA',badge:['b-pass','пароль'],url:BASE+'/fka-dash/',
+   what:'Продажи и доля KT&G по федеральным сетям: паспорт сети, свод, SKU, активности, сегменты, БКГ, регионы. Есть английская версия.',
+   who:'руководство, КАМы',upd:'сборка куба и ярлык «Опубликовать сейчас»',head:BASE+'/fka-dash/index.html'},
+  {name:'Дашборд проекта',alias:'KPI мерчандайзинга по сетям',badge:['b-priv','приватная, claude.ai'],url:'https://claude.ai/artifact/VaLVkZ5674EmxizcMQ23S1',
+   what:'Покрытие плановых точек, AV и стоки по сетям, паспорт сети, KPI details по SKU, точки и визиты, Merch Performance, табель, матрица, методика.',
+   who:'владелец проекта',upd:'пересборка в сессии Claude'},
+  {name:'Пос дашборд',alias:'Карточка торговой точки',badge:['b-open','открыт'],url:BASE+'/pos-dash/',
+   what:'Карточка точки: регион → сеть → адрес; класс точки, продажи категории и KT&G за 12 месяцев, SKU по матрице, визиты со ссылками.',
+   who:'КАМы, полевые команды',upd:'ярлык «Опубликовать_карточку_точки»',meta:BASE+'/pos-dash/pos_data/meta.json'},
+  {name:'Мерч дашборд',alias:'Дашборд мерчандайзера',badge:['b-pass','код из 6 цифр'],url:BASE+'/merch-dash/',
+   what:'План и факт визитов, KPI и динамика на трёх уровнях: мерчандайзер, супервайзер, менеджер проекта.',
+   who:'мерчандайзеры, супервайзеры, менеджер',upd:'ярлык «Опубликовать_сейчас» после недельного конвейера',head:BASE+'/merch-dash/data.json'},
+  {name:'Калькулятор расчёта инкрементала',alias:'Калькулятор листинга',badge:['b-pass','пароль'],url:BASE+'/fka-dash/calc.html',
+   what:'Потенциальный объём продаж SKU при листинге в сеть: сеть, SKU и регионы — расчёт от фактической доли SKU в регионе.',
+   who:'КАМы',upd:'ярлык «Опубликовать калькулятор»',head:BASE+'/fka-dash/calc.html'},
+];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const fmt=d=>`${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+document.getElementById('grid').innerHTML=D.map((x,i)=>`
+  <a class="card" href="${esc(x.url)}"${x.url.startsWith(BASE)?'':' target="_blank" rel="noopener"'}>
+    <div class="top"><div><div class="name">${esc(x.name)}</div><div class="alias">${esc(x.alias)}</div></div><span class="badge ${x.badge[0]}">${esc(x.badge[1])}</span></div>
+    <p class="what">${esc(x.what)}</p>
+    <dl><dt>Для кого</dt><dd>${esc(x.who)}</dd><dt>Обновляется</dt><dd>${esc(x.upd)}</dd></dl>
+    <div class="go"><span class="when" id="w${i}">${x.head||x.meta?'опубликовано: проверяю…':'открывается только владельцу'}</span><b>Открыть →</b></div>
+  </a>`).join('');
+// время публикации: заголовок Last-Modified страницы или built_at карточки точки (тот же сайт)
+D.forEach((x,i)=>{ const el=document.getElementById('w'+i);
+  if(x.meta) fetch(x.meta+'?v='+Date.now(),{cache:'no-store'}).then(r=>r.json()).then(m=>{ el.textContent='данные от '+m.built_at.split(' ')[0].split('-').reverse().join('.')+' '+(m.built_at.split(' ')[1]||''); }).catch(()=>{ el.textContent=''; });
+  else if(x.head) fetch(x.head+'?v='+Date.now(),{method:'HEAD',cache:'no-store'}).then(r=>{ const lm=r.headers.get('last-modified'); el.textContent=lm?'опубликовано '+fmt(new Date(lm)):''; }).catch(()=>{ el.textContent=''; });
+});
+</script>
+</body>
+</html>
